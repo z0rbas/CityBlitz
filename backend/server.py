@@ -333,13 +333,15 @@ class DirectoryDiscoverer:
         
         return keyword_match and (location_match or directory_type == 'chamber of commerce')
     
-    async def _validate_and_deduplicate(self, session, discovered: List[Dict]) -> List[Dict]:
+    async def _validate_and_deduplicate(self, session, discovered: List[Dict], log_func) -> List[Dict]:
         """Validate URLs and remove duplicates"""
         seen_urls = set()
         seen_names = set()
         validated = []
         
-        for directory in discovered:
+        log_func(f"🔄 Validating {len(discovered)} discovered directories")
+        
+        for i, directory in enumerate(discovered):
             url = directory['url']
             name = directory['name'].lower()
             
@@ -354,13 +356,18 @@ class DirectoryDiscoverer:
                         seen_urls.add(url)
                         seen_names.add(name)
                         validated.append(directory)
+                        log_func(f"   ✅ {i+1}: {directory['name']} - Valid")
+                    else:
+                        log_func(f"   ❌ {i+1}: {directory['name']} - HTTP {response.status}")
             except:
                 # If head request fails, still include it (might be valid)
                 if url not in seen_urls:
                     seen_urls.add(url)
                     seen_names.add(name)
                     validated.append(directory)
+                    log_func(f"   ⚠️ {i+1}: {directory['name']} - Validation failed but included")
         
+        log_func(f"✅ Validation complete: {len(validated)} valid directories")
         return validated
     
     async def scrape_directory_listings(self, directory_url: str) -> List[Dict]:
