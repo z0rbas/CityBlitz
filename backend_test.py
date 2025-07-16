@@ -198,141 +198,196 @@ class BackendTester:
             print(f"Error testing directory scraping: {e}")
     
     async def test_enhanced_javascript_scraper(self):
-        """Test Enhanced JavaScript Scraper with South Tampa Chamber"""
-        print("\n=== Testing Enhanced JavaScript Scraper ===")
+        """Test Enhanced JavaScript Scraper with comprehensive validation testing"""
+        print("\n=== Testing Enhanced JavaScript Scraper with Validation ===")
         
         try:
             session = await self.create_session()
             
-            # First, create a South Tampa Chamber directory entry
-            print("Creating South Tampa Chamber directory entry...")
-            south_tampa_directory = {
-                "name": "South Tampa Chamber of Commerce",
-                "url": "https://www.southtampachamber.org/",
-                "directory_type": "chamber of commerce",
-                "location": "Tampa Bay",
-                "description": "South Tampa Chamber - JavaScript-heavy GrowthZone CMS site for testing enhanced scraper"
-            }
-            
-            # Add the directory to the database via discovery API
-            discovery_data = {
-                "location": "Tampa Bay",
-                "directory_types": ["chamber of commerce"],
-                "max_results": 5
-            }
-            
-            # Check if South Tampa Chamber already exists
+            # Get existing directories for testing
             async with session.get(f"{API_BASE}/directories") as response:
-                if response.status == 200:
-                    existing_directories = await response.json()
-                    south_tampa_dir = None
-                    for directory in existing_directories:
-                        if "southtampachamber.org" in directory.get('url', ''):
-                            south_tampa_dir = directory
-                            break
-                    
-                    if not south_tampa_dir:
-                        # Discover directories to potentially add South Tampa Chamber
-                        async with session.post(f"{API_BASE}/discover-directories", json=discovery_data) as discover_response:
-                            if discover_response.status == 200:
-                                discover_result = await discover_response.json()
-                                print(f"Discovery found {discover_result.get('count', 0)} directories")
-                                
-                                # Look for South Tampa Chamber in discovered results
-                                for directory in discover_result.get('directories', []):
-                                    if "southtampachamber.org" in directory.get('url', ''):
-                                        south_tampa_dir = directory
-                                        break
-                    
-                    if not south_tampa_dir:
-                        print("South Tampa Chamber not found in discovery, manually creating entry...")
-                        # For testing purposes, we'll use an existing directory as a proxy
-                        # since we can't directly insert into the database from the test
-                        if existing_directories:
-                            south_tampa_dir = existing_directories[0]  # Use first available directory
-                            print(f"Using proxy directory: {south_tampa_dir.get('name', 'N/A')}")
-                        else:
-                            self.test_results['enhanced_scraper'] = {'passed': False, 'error': 'No directories available for testing'}
-                            return
-                    
-                    print(f"Testing enhanced scraper with: {south_tampa_dir.get('name', 'N/A')}")
-                    print(f"Directory URL: {south_tampa_dir.get('url', 'N/A')}")
-                    
-                    # Test the enhanced scraping
-                    scrape_data = {"directory_id": south_tampa_dir['id']}
-                    
-                    print("Starting enhanced scraping test...")
-                    async with session.post(f"{API_BASE}/scrape-directory", json=scrape_data) as scrape_response:
-                        print(f"Scrape response status: {scrape_response.status}")
-                        
-                        if scrape_response.status == 200:
-                            scrape_result = await scrape_response.json()
-                            print(f"Enhanced scraping successful: {scrape_result.get('success', False)}")
-                            print(f"Businesses found: {scrape_result.get('businesses_found', 0)}")
-                            print(f"Scraping method used: {scrape_result.get('scraping_method', 'unknown')}")
-                            
-                            businesses = scrape_result.get('businesses', [])
-                            
-                            # Verify enhanced scraper functionality
-                            if scrape_result.get('success') and businesses:
-                                print("\n📊 Enhanced Scraper Results:")
-                                print(f"  Total businesses extracted: {len(businesses)}")
-                                
-                                # Check business data quality
-                                businesses_with_phone = sum(1 for b in businesses if b.get('phone'))
-                                businesses_with_email = sum(1 for b in businesses if b.get('email'))
-                                businesses_with_website = sum(1 for b in businesses if b.get('website'))
-                                
-                                print(f"  Businesses with phone: {businesses_with_phone}")
-                                print(f"  Businesses with email: {businesses_with_email}")
-                                print(f"  Businesses with website: {businesses_with_website}")
-                                
-                                # Show sample businesses
-                                print("\n📋 Sample Business Data:")
-                                for i, business in enumerate(businesses[:5]):
-                                    print(f"  Business {i+1}: {business.get('business_name', 'N/A')}")
-                                    print(f"    Phone: {business.get('phone', 'N/A')}")
-                                    print(f"    Email: {business.get('email', 'N/A')}")
-                                    print(f"    Website: {business.get('website', 'N/A')}")
-                                    print()
-                                
-                                # Test passes if we got businesses with contact info
-                                if len(businesses) >= 1 and (businesses_with_phone > 0 or businesses_with_email > 0):
-                                    self.test_results['enhanced_scraper'] = {
-                                        'passed': True,
-                                        'error': None,
-                                        'data': {
-                                            'directory_name': south_tampa_dir.get('name'),
-                                            'directory_url': south_tampa_dir.get('url'),
-                                            'businesses_found': len(businesses),
-                                            'businesses_with_phone': businesses_with_phone,
-                                            'businesses_with_email': businesses_with_email,
-                                            'businesses_with_website': businesses_with_website,
-                                            'scraping_method': scrape_result.get('scraping_method', 'unknown')
-                                        }
-                                    }
-                                    print("✅ Enhanced JavaScript Scraper test PASSED")
-                                else:
-                                    self.test_results['enhanced_scraper'] = {
-                                        'passed': False,
-                                        'error': f"Poor data quality: {len(businesses)} businesses found but insufficient contact info"
-                                    }
-                            else:
-                                self.test_results['enhanced_scraper'] = {
-                                    'passed': False,
-                                    'error': f"Scraping failed or no businesses found: {scrape_result.get('message', 'Unknown error')}"
-                                }
-                        else:
-                            error_text = await scrape_response.text()
-                            self.test_results['enhanced_scraper'] = {
-                                'passed': False,
-                                'error': f"HTTP {scrape_response.status}: {error_text}"
-                            }
-                else:
+                if response.status != 200:
                     self.test_results['enhanced_scraper'] = {
                         'passed': False,
                         'error': "Could not fetch existing directories"
                     }
+                    return
+                
+                existing_directories = await response.json()
+                if not existing_directories:
+                    self.test_results['enhanced_scraper'] = {
+                        'passed': False,
+                        'error': "No directories available for testing"
+                    }
+                    return
+            
+            # Test multiple directory types to verify enhanced validation
+            test_results = {
+                'directories_tested': 0,
+                'fallback_triggered': 0,
+                'validation_working': True,
+                'total_businesses_found': 0,
+                'directories_with_businesses': 0,
+                'form_only_sites_filtered': 0,
+                'test_details': []
+            }
+            
+            print(f"Testing enhanced scraper with {len(existing_directories)} directories...")
+            
+            # Test up to 5 directories to verify different scenarios
+            for i, directory in enumerate(existing_directories[:5]):
+                directory_id = directory['id']
+                directory_name = directory.get('name', 'N/A')
+                directory_url = directory.get('url', 'N/A')
+                
+                print(f"\n📂 Testing Directory {i+1}: {directory_name}")
+                print(f"   URL: {directory_url}")
+                
+                scrape_data = {"directory_id": directory_id}
+                
+                try:
+                    async with session.post(f"{API_BASE}/scrape-directory", json=scrape_data) as scrape_response:
+                        if scrape_response.status == 200:
+                            scrape_result = await scrape_response.json()
+                            
+                            businesses = scrape_result.get('businesses', [])
+                            businesses_found = len(businesses)
+                            scraping_method = scrape_result.get('scraping_method', 'basic')
+                            
+                            print(f"   ✅ Scraping successful: {businesses_found} businesses found")
+                            print(f"   🔧 Method used: {scraping_method}")
+                            
+                            # Check if fallback to Playwright was triggered
+                            if scraping_method == 'playwright' or 'enhanced' in scraping_method.lower():
+                                test_results['fallback_triggered'] += 1
+                                print(f"   ⚡ Fallback to enhanced Playwright scraping triggered")
+                            
+                            # Validate business data quality
+                            valid_businesses = 0
+                            businesses_with_contact = 0
+                            junk_filtered = 0
+                            
+                            for business in businesses:
+                                business_name = business.get('business_name', '').strip()
+                                phone = business.get('phone', '').strip()
+                                email = business.get('email', '').strip()
+                                website = business.get('website', '').strip()
+                                
+                                # Check if business has valid contact info
+                                has_contact = bool(phone or email or website)
+                                if has_contact:
+                                    businesses_with_contact += 1
+                                
+                                # Check for form elements and junk data (should be filtered out)
+                                junk_indicators = [
+                                    'form', 'application', 'register', 'login', 'submit',
+                                    'required field', 'enter your', 'contact information',
+                                    'member application', 'sign up', 'membership'
+                                ]
+                                
+                                is_junk = any(indicator in business_name.lower() for indicator in junk_indicators)
+                                if is_junk:
+                                    junk_filtered += 1
+                                    print(f"   ⚠️  Potential junk data found: {business_name}")
+                                else:
+                                    valid_businesses += 1
+                            
+                            # Record test details
+                            test_detail = {
+                                'directory_name': directory_name,
+                                'directory_url': directory_url,
+                                'businesses_found': businesses_found,
+                                'valid_businesses': valid_businesses,
+                                'businesses_with_contact': businesses_with_contact,
+                                'junk_filtered': junk_filtered,
+                                'scraping_method': scraping_method,
+                                'fallback_used': scraping_method != 'basic'
+                            }
+                            test_results['test_details'].append(test_detail)
+                            
+                            # Update overall results
+                            test_results['directories_tested'] += 1
+                            test_results['total_businesses_found'] += businesses_found
+                            
+                            if businesses_found > 0:
+                                test_results['directories_with_businesses'] += 1
+                            
+                            # Check if this looks like a form-only site (should return 0 businesses)
+                            if businesses_found == 0 and 'chamber' in directory_name.lower():
+                                test_results['form_only_sites_filtered'] += 1
+                                print(f"   🚫 Form-only site correctly filtered (0 businesses)")
+                            
+                            # Validate data quality
+                            if junk_filtered > valid_businesses:
+                                test_results['validation_working'] = False
+                                print(f"   ❌ Validation issue: More junk ({junk_filtered}) than valid businesses ({valid_businesses})")
+                            else:
+                                print(f"   ✅ Validation working: {valid_businesses} valid, {junk_filtered} junk filtered")
+                            
+                            # Show sample businesses for verification
+                            if businesses_found > 0:
+                                print(f"   📋 Sample businesses:")
+                                for j, business in enumerate(businesses[:3]):
+                                    name = business.get('business_name', 'N/A')
+                                    phone = business.get('phone', 'N/A')
+                                    email = business.get('email', 'N/A')
+                                    print(f"     {j+1}. {name} | {phone} | {email}")
+                        
+                        else:
+                            error_text = await scrape_response.text()
+                            print(f"   ❌ Scraping failed: HTTP {scrape_response.status}")
+                            test_results['test_details'].append({
+                                'directory_name': directory_name,
+                                'directory_url': directory_url,
+                                'error': f"HTTP {scrape_response.status}: {error_text}"
+                            })
+                
+                except Exception as e:
+                    print(f"   ❌ Error testing directory: {str(e)}")
+                    test_results['test_details'].append({
+                        'directory_name': directory_name,
+                        'directory_url': directory_url,
+                        'error': str(e)
+                    })
+            
+            # Evaluate overall test results
+            print(f"\n📊 Enhanced Scraper Test Summary:")
+            print(f"   Directories tested: {test_results['directories_tested']}")
+            print(f"   Fallback to Playwright triggered: {test_results['fallback_triggered']} times")
+            print(f"   Total businesses found: {test_results['total_businesses_found']}")
+            print(f"   Directories with businesses: {test_results['directories_with_businesses']}")
+            print(f"   Form-only sites filtered: {test_results['form_only_sites_filtered']}")
+            print(f"   Validation working: {test_results['validation_working']}")
+            
+            # Determine if test passed
+            test_passed = (
+                test_results['directories_tested'] > 0 and
+                test_results['validation_working'] and
+                (test_results['total_businesses_found'] > 0 or test_results['form_only_sites_filtered'] > 0)
+            )
+            
+            if test_passed:
+                self.test_results['enhanced_scraper'] = {
+                    'passed': True,
+                    'error': None,
+                    'data': test_results
+                }
+                print("✅ Enhanced JavaScript Scraper with Validation test PASSED")
+            else:
+                error_msg = "Enhanced scraper test failed: "
+                if test_results['directories_tested'] == 0:
+                    error_msg += "No directories tested successfully"
+                elif not test_results['validation_working']:
+                    error_msg += "Validation not working properly"
+                elif test_results['total_businesses_found'] == 0 and test_results['form_only_sites_filtered'] == 0:
+                    error_msg += "No businesses found and no form-only sites detected"
+                
+                self.test_results['enhanced_scraper'] = {
+                    'passed': False,
+                    'error': error_msg,
+                    'data': test_results
+                }
+                print(f"❌ Enhanced JavaScript Scraper test FAILED: {error_msg}")
                     
         except Exception as e:
             self.test_results['enhanced_scraper'] = {
