@@ -219,10 +219,9 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Directory Discovery Interface"
-    - "Directory Management Interface"
     - "Business Contacts Display"
-  stuck_tasks: []
+  stuck_tasks:
+    - "Business Contacts Display"
   test_all: false
   test_priority: "high_first"
 
