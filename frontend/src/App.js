@@ -97,9 +97,21 @@ const App = () => {
 
   const viewBusinesses = async (directory) => {
     console.log('Viewing businesses for directory:', directory);
+    console.log('Directory ID:', directory.id);
     setSelectedDirectory(directory);
     setActiveTab('businesses');
-    await fetchBusinesses(directory.id);
+    
+    // Add explicit loading state and error handling
+    setLoading(true);
+    try {
+      await fetchBusinesses(directory.id);
+      console.log('Successfully fetched businesses');
+    } catch (error) {
+      console.error('Error in viewBusinesses:', error);
+      alert('Error loading businesses. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
