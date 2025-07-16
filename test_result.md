@@ -150,20 +150,17 @@ backend:
         agent: "testing"
         comment: "✅ PASSED - Both GET /api/directories and GET /api/businesses work correctly. Directory filtering by directory_id functions properly. Data structure validation passed for all required fields."
   
-  - task: "CSV Export API"
+  - task: "Enhanced JavaScript Scraper"
     implemented: true
-    working: true
+    working: "NA"
     file: "server.py"
     stuck_count: 0
-    priority: "medium"
-    needs_retesting: false
+    priority: "high"
+    needs_retesting: true
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Implemented CSV export functionality for business contacts to be used by SDRs"
-      - working: true
-        agent: "testing"
-        comment: "✅ PASSED - CSV export generates proper format with correct headers. Successfully exported 461 lines for test directory. CSV structure matches expected format for SDR usage."
+        comment: "Implemented enhanced Playwright-based scraping for JavaScript-heavy sites like GrowthZone CMS. The scraper now tries basic scraping first, then falls back to browser automation if few businesses are found. This should handle South Tampa Chamber and similar dynamic sites."
 
 frontend:
   - task: "Directory Discovery Interface"
