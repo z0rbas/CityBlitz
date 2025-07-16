@@ -210,6 +210,9 @@ frontend:
       - working: false
         agent: "testing"
         comment: "❌ CRITICAL ISSUE - Business contacts table displays correctly with proper headers (Business Name, Contact, Phone, Email, Website) but shows 0 businesses despite directories indicating 47 and 40 businesses scraped. The fetchBusinesses API call is not being triggered when clicking 'View Businesses'. Directory cards show business counts but the data is not loading in the business contacts tab. This breaks the core functionality of viewing scraped business data."
+      - working: false
+        agent: "testing"
+        comment: "❌ CONFIRMED BUG STILL EXISTS - Comprehensive testing shows: 1) API /api/businesses works correctly (returns 87 businesses), 2) Directory management shows 10 directories with business counts (37, 40 businesses), 3) 'View Businesses' buttons exist and switch to business tab, 4) BUT business table remains empty (0 rows). Root cause: fetchBusinesses function in viewBusinesses() is not being called when clicking 'View Businesses' button. No network requests are made when button is clicked, indicating the onClick handler is not properly triggering the API call. The selectedDirectory state may not be set correctly, preventing the API call with directory_id parameter."
 
 metadata:
   created_by: "main_agent"
