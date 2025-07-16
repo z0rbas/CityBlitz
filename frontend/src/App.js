@@ -14,6 +14,9 @@ const App = () => {
   const [selectedDirectory, setSelectedDirectory] = useState(null);
   const [searchResults, setSearchResults] = useState([]);
 
+  const [progressLogs, setProgressLogs] = useState([]);
+  const [showLogs, setShowLogs] = useState(false);
+
   // Fetch directories on component mount
   useEffect(() => {
     fetchDirectories();
@@ -43,6 +46,9 @@ const App = () => {
 
   const discoverDirectories = async () => {
     setLoading(true);
+    setProgressLogs([]);
+    setShowLogs(true);
+    
     try {
       const response = await axios.post(`${API}/discover-directories`, {
         location: location,
@@ -51,6 +57,7 @@ const App = () => {
       });
       
       setSearchResults(response.data.directories);
+      setProgressLogs(response.data.progress_log || []);
       await fetchDirectories();
     } catch (error) {
       console.error('Error discovering directories:', error);
@@ -62,11 +69,15 @@ const App = () => {
 
   const scrapeDirectory = async (directoryId) => {
     setLoading(true);
+    setProgressLogs([]);
+    setShowLogs(true);
+    
     try {
       const response = await axios.post(`${API}/scrape-directory`, {
         directory_id: directoryId
       });
       
+      setProgressLogs(response.data.progress_log || []);
       alert(`Successfully scraped ${response.data.businesses_found} businesses!`);
       await fetchDirectories();
       if (selectedDirectory?.id === directoryId) {
