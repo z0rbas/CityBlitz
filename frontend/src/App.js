@@ -29,9 +29,12 @@ const App = () => {
   };
 
   const fetchBusinesses = async (directoryId = null) => {
+    console.log('fetchBusinesses called with directoryId:', directoryId);
     try {
       const url = directoryId ? `${API}/businesses?directory_id=${directoryId}` : `${API}/businesses`;
+      console.log('Making API call to:', url);
       const response = await axios.get(url);
+      console.log('API response:', response.data);
       setBusinesses(response.data);
     } catch (error) {
       console.error('Error fetching businesses:', error);
