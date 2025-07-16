@@ -564,24 +564,8 @@ class DirectoryDiscoverer:
             await page.wait_for_load_state('networkidle')
             await asyncio.sleep(3)  # Additional wait for dynamic content
             
-            # Try to find a search or "load more" button that might reveal more businesses
-            search_selectors = [
-                'button:has-text("Search")',
-                'input[type="submit"][value*="Search"]',
-                'button:has-text("Load")',
-                'button:has-text("More")',
-                'button:has-text("Show All")'
-            ]
-            
-            for selector in search_selectors:
-                try:
-                    if await page.locator(selector).count() > 0:
-                        await page.locator(selector).first.click()
-                        await page.wait_for_timeout(3000)  # Wait for results
-                        logging.info(f"📋 Clicked search/load button: {selector}")
-                        break
-                except:
-                    continue
+            # Try to find and interact with search/directory elements
+            await self._interact_with_directory_elements(page)
             
             # Get page content
             content = await page.content()
@@ -589,31 +573,41 @@ class DirectoryDiscoverer:
             # Parse with BeautifulSoup for structured extraction
             soup = BeautifulSoup(content, 'html.parser')
             
-            # Strategy 1: Look for business cards or containers
+            # Strategy 1: Look for GrowthZone-specific business containers
             business_containers = soup.find_all(['div', 'article', 'section'], 
-                                              class_=re.compile(r'business|member|company|listing|card|item|entry'))
+                                              class_=re.compile(r'business|member|company|listing|card|item|entry|gz-'))
+            
+            # Strategy 2: Look for any div with contact information
+            contact_divs = soup.find_all('div', string=re.compile(r'\d{3}[-.\s]?\d{3}[-.\s]?\d{4}'))
+            business_containers.extend(contact_divs)
+            
+            # Strategy 3: Look for parent elements of phone/email links
+            phone_links = soup.find_all('a', href=re.compile(r'tel:'))
+            email_links = soup.find_all('a', href=re.compile(r'mailto:'))
+            
+            for link in phone_links + email_links:
+                parent = link.parent
+                if parent:
+                    business_containers.append(parent)
             
             logging.info(f"📊 Found {len(business_containers)} potential business containers")
             
+            # Extract businesses from containers
             for container in business_containers:
                 business = self._extract_business_from_container_playwright(container, page_url)
-                if business:
+                if business and self._is_valid_business_record(business):
                     businesses.append(business)
             
-            # Strategy 2: Look for table-based listings
+            # Strategy 4: Look for table-based listings
             tables = soup.find_all('table')
             for table in tables:
                 table_businesses = self._extract_businesses_from_table_playwright(table, page_url)
-                businesses.extend(table_businesses)
-            
-            # Strategy 3: Look for any element with contact information
-            contact_elements = soup.find_all(text=re.compile(r'\d{3}[-.\s]?\d{3}[-.\s]?\d{4}'))
-            for element in contact_elements:
-                parent = element.parent
-                if parent:
-                    business = self._extract_business_from_element_playwright(parent, page_url)
-                    if business:
+                for business in table_businesses:
+                    if self._is_valid_business_record(business):
                         businesses.append(business)
+            
+            # Remove duplicates
+            businesses = self._remove_duplicate_businesses(businesses)
             
             logging.info(f"📋 Extracted {len(businesses)} businesses from Playwright scraping")
             
@@ -621,6 +615,103 @@ class DirectoryDiscoverer:
             logging.error(f"❌ Error in Playwright business scraping: {str(e)}")
         
         return businesses
+    
+    async def _interact_with_directory_elements(self, page):
+        """Interact with directory elements to load more content"""
+        try:
+            # Try to find a search button or "load more" button
+            search_selectors = [
+                'button:has-text("Search")',
+                'input[type="submit"][value*="Search"]',
+                'button:has-text("Load")',
+                'button:has-text("More")',
+                'button:has-text("Show All")',
+                'button:has-text("View All")',
+                'a:has-text("Directory")',
+                'a:has-text("Members")',
+                'a:has-text("Businesses")'
+            ]
+            
+            for selector in search_selectors:
+                try:
+                    if await page.locator(selector).count() > 0:
+                        await page.locator(selector).first.click()
+                        await page.wait_for_timeout(3000)  # Wait for results
+                        logging.info(f"📋 Clicked element: {selector}")
+                        break
+                except Exception as e:
+                    continue
+            
+            # Try to find dropdown menus or select elements that might filter businesses
+            select_elements = await page.locator('select').all()
+            for select in select_elements:
+                try:
+                    options = await select.locator('option').all()
+                    if len(options) > 1:
+                        # Try selecting "All" or first non-empty option
+                        for option in options:
+                            option_text = await option.inner_text()
+                            if any(keyword in option_text.lower() for keyword in ['all', 'show', 'view']):
+                                await select.select_option(value=await option.get_attribute('value'))
+                                await page.wait_for_timeout(2000)
+                                logging.info(f"📋 Selected option: {option_text}")
+                                break
+                        break
+                except Exception as e:
+                    continue
+            
+        except Exception as e:
+            logging.error(f"❌ Error interacting with directory elements: {str(e)}")
+    
+    def _is_valid_business_record(self, business: Dict) -> bool:
+        """Check if a business record is valid"""
+        if not business or not business.get('business_name'):
+            return False
+        
+        name = business.get('business_name', '').strip()
+        
+        # Must have valid business name
+        if not self._is_valid_business_name(name):
+            return False
+        
+        # Must have at least one contact method
+        phone = business.get('phone', '').strip()
+        email = business.get('email', '').strip()
+        website = business.get('website', '').strip()
+        
+        if not any([phone, email, website]):
+            return False
+        
+        # Phone validation
+        if phone and not re.match(r'^\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}$', phone):
+            # Invalid phone format
+            return False
+        
+        # Email validation
+        if email and not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
+            # Invalid email format
+            return False
+        
+        return True
+    
+    def _remove_duplicate_businesses(self, businesses: List[Dict]) -> List[Dict]:
+        """Remove duplicate businesses"""
+        seen = set()
+        unique_businesses = []
+        
+        for business in businesses:
+            # Create a unique identifier
+            name = business.get('business_name', '').strip().lower()
+            phone = business.get('phone', '').strip()
+            email = business.get('email', '').strip()
+            
+            identifier = f"{name}|{phone}|{email}"
+            
+            if identifier not in seen:
+                seen.add(identifier)
+                unique_businesses.append(business)
+        
+        return unique_businesses
     
     def _extract_business_from_container_playwright(self, container, base_url: str) -> Optional[Dict]:
         """Extract business info from a container using Playwright results"""
