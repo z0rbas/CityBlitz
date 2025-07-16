@@ -761,16 +761,28 @@ class DirectoryDiscoverer:
         if not name or len(name) < 3 or len(name) > 100:
             return False
         
-        # Skip obvious junk
+        # Skip obvious junk and form elements
         junk_patterns = [
             'home', 'about', 'contact', 'services', 'news', 'events',
             'login', 'register', 'search', 'navigation', 'menu',
             'header', 'footer', 'privacy', 'terms', 'copyright',
-            'click here', 'read more', 'learn more', 'view all'
+            'click here', 'read more', 'learn more', 'view all',
+            'member application', 'application', 'form', 'submit',
+            'required field', 'span', 'div', 'class', 'title',
+            'register now', 'sign up', 'membership', 'join',
+            'form-req', 'gz-form', 'required', '*', 'field'
         ]
         
         name_lower = name.lower()
         if any(junk in name_lower for junk in junk_patterns):
+            return False
+        
+        # Skip HTML-like content
+        if '<' in name or '>' in name or name.startswith('*'):
+            return False
+        
+        # Skip if it's mostly symbols or numbers
+        if len(re.sub(r'[A-Za-z\s]', '', name)) > len(name) * 0.3:
             return False
         
         # Business indicators
@@ -780,7 +792,12 @@ class DirectoryDiscoverer:
             'consulting', 'restaurant', 'store', 'shop', 'clinic',
             'center', 'law', 'legal', 'medical', 'dental', 'insurance',
             'real estate', 'accounting', 'construction', 'design',
-            'engineering', 'technology', 'management', 'agency', 'firm'
+            'engineering', 'technology', 'management', 'agency', 'firm',
+            'studio', 'gallery', 'market', 'trading', 'supply', 'equipment',
+            'repair', 'maintenance', 'cleaning', 'security', 'transport',
+            'logistics', 'hotel', 'motel', 'inn', 'resort', 'cafe',
+            'bar', 'grill', 'deli', 'bakery', 'pharmacy', 'bank',
+            'auto', 'automotive', 'dealership', 'salon', 'spa', 'fitness'
         ]
         
         # If it has clear business indicators, it's likely a business
@@ -789,6 +806,10 @@ class DirectoryDiscoverer:
         
         # If it's properly capitalized and not all caps, might be a business
         if not name.isupper() and any(word[0].isupper() for word in name.split()):
+            # Additional check: must not be a single word unless it's clearly a business name
+            words = name.split()
+            if len(words) == 1:
+                return any(indicator in name_lower for indicator in business_indicators)
             return True
         
         return False
