@@ -99,19 +99,42 @@ const App = () => {
   };
 
   const viewBusinesses = async (directory) => {
-    console.log('Viewing businesses for directory:', directory);
-    console.log('Directory ID:', directory.id);
+    console.log('=== viewBusinesses called ===');
+    console.log('Directory:', directory);
+    console.log('Directory ID:', directory?.id);
+    
+    if (!directory || !directory.id) {
+      console.error('No directory or directory ID provided');
+      alert('Error: No directory selected');
+      return;
+    }
+    
     setSelectedDirectory(directory);
     setActiveTab('businesses');
     
-    // Add explicit loading state and error handling
+    // Clear existing businesses first
+    setBusinesses([]);
+    
+    // Add explicit loading state
     setLoading(true);
+    
     try {
-      await fetchBusinesses(directory.id);
-      console.log('Successfully fetched businesses');
+      console.log('About to call fetchBusinesses with ID:', directory.id);
+      
+      // Make API call directly here to debug
+      const url = `${API}/businesses?directory_id=${directory.id}`;
+      console.log('Making direct API call to:', url);
+      
+      const response = await axios.get(url);
+      console.log('Direct API response:', response.data);
+      console.log('Number of businesses:', response.data.length);
+      
+      setBusinesses(response.data);
+      console.log('Businesses state updated');
+      
     } catch (error) {
       console.error('Error in viewBusinesses:', error);
-      alert('Error loading businesses. Please try again.');
+      alert(`Error loading businesses: ${error.message}`);
     } finally {
       setLoading(false);
     }
