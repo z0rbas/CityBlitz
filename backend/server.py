@@ -537,56 +537,323 @@ class DirectoryDiscoverer:
             return False
     
     async def _extract_business_contacts(self, soup: BeautifulSoup, base_url: str, session) -> List[Dict]:
-        """Extract business contacts with proper data fields"""
+        """Extract business contacts focusing on structured business data"""
         businesses = []
         
-        # Look for structured business listings
-        business_containers = []
+        logging.info("🔍 Looking for structured business listings...")
         
-        # Try multiple selectors to find business listings
+        # Strategy 1: Look for tables with business data
+        businesses.extend(self._extract_from_tables(soup, base_url))
+        
+        # Strategy 2: Look for structured business cards/listings
+        businesses.extend(self._extract_from_business_cards(soup, base_url))
+        
+        # Strategy 3: Look for directory-style lists
+        businesses.extend(self._extract_from_directory_lists(soup, base_url))
+        
+        # Filter out junk and deduplicate
+        valid_businesses = []
+        for business in businesses:
+            if self._is_valid_business_data(business):
+                valid_businesses.append(business)
+        
+        final_businesses = self._deduplicate_businesses(valid_businesses)
+        
+        logging.info(f"✅ Extracted {len(final_businesses)} valid businesses")
+        return final_businesses
+    
+    def _extract_from_tables(self, soup: BeautifulSoup, base_url: str) -> List[Dict]:
+        """Extract business data from tables"""
+        businesses = []
+        
+        tables = soup.find_all('table')
+        for table in tables:
+            table_text = table.get_text().lower()
+            
+            # Check if this table contains business data
+            if not any(keyword in table_text for keyword in ['business', 'company', 'member', 'contact', 'phone', 'email']):
+                continue
+                
+            logging.info(f"📊 Found business table with {len(table.find_all('tr'))} rows")
+            
+            # Find header row to understand column structure
+            headers = []
+            header_row = table.find('tr')
+            if header_row:
+                for th in header_row.find_all(['th', 'td']):
+                    headers.append(th.get_text().strip().lower())
+            
+            # Process data rows
+            rows = table.find_all('tr')[1:]  # Skip header row
+            for row in rows:
+                cells = row.find_all(['td', 'th'])
+                if len(cells) < 2:  # Need at least 2 cells for business data
+                    continue
+                
+                business = self._extract_business_from_table_row(cells, headers, base_url)
+                if business:
+                    businesses.append(business)
+        
+        return businesses
+    
+    def _extract_from_business_cards(self, soup: BeautifulSoup, base_url: str) -> List[Dict]:
+        """Extract business data from business card-style elements"""
+        businesses = []
+        
+        # Look for business card containers
         selectors = [
-            # Common business listing selectors
-            '.member-listing, .business-listing, .directory-item, .member-item',
-            '[class*="member"], [class*="business"], [class*="directory"], [class*="listing"]',
-            '.company, .organization, .firm, .business-card',
-            # Table rows that might contain business info
-            'tr:has(td:contains("phone")), tr:has(td:contains("email")), tr:has(td:contains("@"))',
-            # Divs with business-like content
-            'div:has(a[href*="tel:"]), div:has(a[href*="mailto:"]), div:has(a[href*="http"])'
+            '.business-card', '.member-card', '.company-card',
+            '.business-listing', '.member-listing', '.company-listing',
+            '.business-item', '.member-item', '.company-item',
+            '[class*="business-"]', '[class*="member-"]', '[class*="company-"]'
         ]
         
         for selector in selectors:
             try:
-                containers = soup.select(selector)
-                if containers:
-                    business_containers.extend(containers)
-                    logging.info(f"📋 Found {len(containers)} potential business containers with selector: {selector}")
+                cards = soup.select(selector)
+                if cards:
+                    logging.info(f"🎴 Found {len(cards)} business cards with selector: {selector}")
+                    for card in cards:
+                        business = self._extract_business_from_card(card, base_url)
+                        if business:
+                            businesses.append(business)
             except:
                 continue
         
-        # Remove duplicates
-        unique_containers = []
-        seen_texts = set()
-        for container in business_containers:
-            text = container.get_text()[:100]  # First 100 chars as identifier
-            if text not in seen_texts:
-                seen_texts.add(text)
-                unique_containers.append(container)
+        return businesses
+    
+    def _extract_from_directory_lists(self, soup: BeautifulSoup, base_url: str) -> List[Dict]:
+        """Extract business data from directory-style lists"""
+        businesses = []
         
-        logging.info(f"🔍 Processing {len(unique_containers)} unique business containers")
-        
-        # Extract business information from each container
-        for container in unique_containers:
-            business = self._extract_business_from_container(container, base_url)
-            if business and business.get('business_name') and len(business.get('business_name', '')) > 3:
-                # Filter out junk data
-                if not self._is_junk_business_data(business):
+        # Look for lists that contain business information
+        lists = soup.find_all(['ul', 'ol', 'dl'])
+        for list_elem in lists:
+            list_text = list_elem.get_text().lower()
+            
+            # Check if this list contains business data
+            if not any(keyword in list_text for keyword in ['phone', 'email', '@', 'contact', 'website']):
+                continue
+            
+            items = list_elem.find_all(['li', 'dt', 'dd'])
+            if len(items) < 3:  # Need multiple items for a directory
+                continue
+                
+            logging.info(f"📋 Found directory list with {len(items)} items")
+            
+            for item in items:
+                business = self._extract_business_from_list_item(item, base_url)
+                if business:
                     businesses.append(business)
         
-        # Deduplicate businesses
-        final_businesses = self._deduplicate_businesses(businesses)
+        return businesses
+    
+    def _extract_business_from_table_row(self, cells, headers, base_url: str) -> Optional[Dict]:
+        """Extract business data from a table row"""
+        if len(cells) < 2:
+            return None
         
-        return final_businesses
+        business = {}
+        row_text = ' '.join(cell.get_text() for cell in cells)
+        
+        # Try to map cells to business fields based on headers
+        for i, cell in enumerate(cells):
+            cell_text = cell.get_text().strip()
+            if not cell_text or len(cell_text) < 2:
+                continue
+                
+            header = headers[i] if i < len(headers) else ""
+            
+            # Map based on header content
+            if any(keyword in header for keyword in ['name', 'business', 'company']):
+                business['business_name'] = cell_text
+            elif any(keyword in header for keyword in ['contact', 'person', 'owner']):
+                business['contact_person'] = cell_text
+            elif any(keyword in header for keyword in ['phone', 'tel']):
+                business['phone'] = cell_text
+            elif any(keyword in header for keyword in ['email', 'mail']):
+                business['email'] = cell_text
+            elif any(keyword in header for keyword in ['website', 'web', 'url']):
+                business['website'] = cell_text
+            elif any(keyword in header for keyword in ['address', 'location']):
+                business['address'] = cell_text
+        
+        # If no headers matched, try to extract from first few cells
+        if not business.get('business_name') and len(cells) > 0:
+            business['business_name'] = cells[0].get_text().strip()
+        
+        # Extract additional data from cell content
+        self._extract_contact_info_from_text(row_text, business)
+        self._extract_links_from_cells(cells, business, base_url)
+        
+        return business if business.get('business_name') else None
+    
+    def _extract_business_from_card(self, card, base_url: str) -> Optional[Dict]:
+        """Extract business data from a business card element"""
+        business = {}
+        card_text = card.get_text()
+        
+        # Look for business name in headings
+        name_element = card.find(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+        if name_element:
+            business['business_name'] = name_element.get_text().strip()
+        
+        # Extract contact information
+        self._extract_contact_info_from_text(card_text, business)
+        self._extract_links_from_element(card, business, base_url)
+        
+        return business if business.get('business_name') else None
+    
+    def _extract_business_from_list_item(self, item, base_url: str) -> Optional[Dict]:
+        """Extract business data from a list item"""
+        business = {}
+        item_text = item.get_text()
+        
+        # Look for business name (usually first line or in strong/bold)
+        name_element = item.find(['strong', 'b', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+        if name_element:
+            business['business_name'] = name_element.get_text().strip()
+        else:
+            # Use first line as business name
+            lines = [line.strip() for line in item_text.split('\n') if line.strip()]
+            if lines:
+                business['business_name'] = lines[0]
+        
+        # Extract contact information
+        self._extract_contact_info_from_text(item_text, business)
+        self._extract_links_from_element(item, business, base_url)
+        
+        return business if business.get('business_name') else None
+    
+    def _extract_contact_info_from_text(self, text: str, business: Dict):
+        """Extract phone, email, and address from text"""
+        # Extract phone number
+        if not business.get('phone'):
+            phone_patterns = [
+                r'(\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})',
+                r'(\d{3}[-.\s]?\d{3}[-.\s]?\d{4})',
+                r'(\+1[-.\s]?\d{3}[-.\s]?\d{3}[-.\s]?\d{4})'
+            ]
+            for pattern in phone_patterns:
+                match = re.search(pattern, text)
+                if match:
+                    business['phone'] = match.group(1).strip()
+                    break
+        
+        # Extract email
+        if not business.get('email'):
+            email_match = re.search(r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', text)
+            if email_match:
+                business['email'] = email_match.group(1).strip()
+        
+        # Extract address
+        if not business.get('address'):
+            address_patterns = [
+                r'(\d+[^,\n]*(?:street|st|avenue|ave|road|rd|drive|dr|lane|ln|blvd|boulevard|way|place|pl|court|ct|circle|cir)[^,\n]*(?:,\s*[^,\n]*){0,3})',
+                r'(\d+[^,\n]*,\s*[^,\n]*,\s*[A-Z]{2}\s*\d{5})',
+                r'([A-Z][^,\n]*,\s*[A-Z]{2}\s*\d{5})'
+            ]
+            for pattern in address_patterns:
+                match = re.search(pattern, text, re.IGNORECASE)
+                if match:
+                    business['address'] = match.group(1).strip()
+                    break
+    
+    def _extract_links_from_element(self, element, business: Dict, base_url: str):
+        """Extract website and social media links from an element"""
+        links = element.find_all('a', href=True)
+        
+        for link in links:
+            href = link.get('href')
+            if not href:
+                continue
+                
+            # Skip internal navigation links
+            if href.startswith(('#', 'javascript:', 'mailto:', 'tel:')):
+                if href.startswith('mailto:') and not business.get('email'):
+                    business['email'] = href.replace('mailto:', '').strip()
+                elif href.startswith('tel:') and not business.get('phone'):
+                    business['phone'] = href.replace('tel:', '').strip()
+                continue
+            
+            # Convert relative URLs to absolute
+            full_url = urljoin(base_url, href)
+            
+            # Categorize the link
+            if not business.get('website'):
+                # Check if this is likely a business website (not social media)
+                if not any(social in full_url.lower() for social in ['facebook', 'twitter', 'instagram', 'linkedin']):
+                    business['website'] = full_url
+            
+            # Extract social media links
+            social_links = business.get('socials', '').split('; ') if business.get('socials') else []
+            
+            if 'facebook.com' in full_url.lower():
+                social_links.append(f"Facebook: {full_url}")
+            elif 'linkedin.com' in full_url.lower():
+                social_links.append(f"LinkedIn: {full_url}")
+            elif 'twitter.com' in full_url.lower():
+                social_links.append(f"Twitter: {full_url}")
+            elif 'instagram.com' in full_url.lower():
+                social_links.append(f"Instagram: {full_url}")
+            
+            if social_links:
+                business['socials'] = '; '.join(social_links)
+    
+    def _extract_links_from_cells(self, cells, business: Dict, base_url: str):
+        """Extract links from table cells"""
+        for cell in cells:
+            self._extract_links_from_element(cell, business, base_url)
+    
+    def _is_valid_business_data(self, business: Dict) -> bool:
+        """Enhanced validation for business data"""
+        if not business or not business.get('business_name'):
+            return False
+            
+        name = business.get('business_name', '').strip().lower()
+        
+        # More comprehensive junk filter
+        junk_patterns = [
+            # Website navigation and content
+            'home', 'about', 'contact', 'services', 'products', 'news', 'events',
+            'blog', 'resources', 'login', 'register', 'search', 'menu', 'navigation',
+            # Chamber-specific content
+            'membership', 'join now', 'member benefits', 'networking programs',
+            'member spotlight', 'ribbon cutting', 'member login', 'member directory',
+            'business directory', 'member news', 'member tutorials', 'quick links',
+            # Generic content
+            'privacy policy', 'terms of service', 'cookie policy', 'sitemap',
+            'accessibility', 'disclaimer', 'copyright', 'all rights reserved',
+            # Social media
+            'facebook', 'twitter', 'instagram', 'linkedin', 'youtube',
+            # Chamber organization content
+            'mission', 'vision', 'our vision', 'our mission', 'about us',
+            'board of directors', 'staff', 'history', 'awards', 'recognitions',
+            # Page elements
+            'pages', 'page', 'directory', 'welcome to', 'thank you',
+            'click here', 'read more', 'learn more', 'view all', 'see all',
+            # Program names
+            'competitive edge', 'leadership', 'emerging leaders', 'workforce development',
+            'minority business accelerator', 'return on', 'collegiate leadership'
+        ]
+        
+        # Check if name contains junk patterns
+        for pattern in junk_patterns:
+            if pattern in name:
+                return False
+        
+        # Check name length
+        if len(name) < 3 or len(name) > 100:
+            return False
+        
+        # Must have at least one contact method
+        has_contact = any([
+            business.get('phone'),
+            business.get('email'),
+            business.get('website')
+        ])
+        
+        return has_contact
     
     def _extract_business_from_container(self, container, base_url: str) -> Dict:
         """Extract business information from a single container"""
