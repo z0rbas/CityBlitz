@@ -222,7 +222,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Business Contacts Display"
+    - "Enhanced JavaScript Scraper"
   stuck_tasks:
     - "Business Contacts Display"
   test_all: false
