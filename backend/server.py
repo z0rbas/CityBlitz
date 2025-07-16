@@ -674,6 +674,21 @@ class DirectoryDiscoverer:
         if not self._is_valid_business_name(name):
             return False
         
+        # Additional checks for obvious non-business entries
+        name_lower = name.lower()
+        non_business_indicators = [
+            'member application', 'application', 'form', 'login', 'register',
+            'signup', 'sign up', 'join', 'membership', 'contact us',
+            'about us', 'home page', 'website', 'email', 'phone',
+            'address', 'city', 'state', 'zip', 'country', 'required',
+            'field', 'select', 'enter', 'please', 'your', 'name',
+            'reporter', 'journalist', 'writer', 'editor', 'reach her',
+            'reach him', '@', 'subscribe', 'promo', 'code', 'click here'
+        ]
+        
+        if any(indicator in name_lower for indicator in non_business_indicators):
+            return False
+        
         # Must have at least one contact method
         phone = business.get('phone', '').strip()
         email = business.get('email', '').strip()
@@ -682,14 +697,33 @@ class DirectoryDiscoverer:
         if not any([phone, email, website]):
             return False
         
-        # Phone validation
-        if phone and not re.match(r'^\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}$', phone):
-            # Invalid phone format
+        # Phone validation - must be real phone, not placeholder
+        if phone:
+            if not re.match(r'^\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}$', phone):
+                return False
+            # Check for placeholder numbers
+            if phone in ['(000) 000-0000', '000-000-0000', '(123) 456-7890', '123-456-7890']:
+                return False
+        
+        # Email validation - must be real email, not placeholder
+        if email:
+            if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
+                return False
+            # Check for generic/placeholder emails
+            if any(generic in email.lower() for generic in ['example.com', 'test.com', 'placeholder']):
+                return False
+        
+        # Website validation - must be real website
+        if website:
+            if any(invalid in website.lower() for invalid in ['example.com', 'test.com', 'placeholder']):
+                return False
+        
+        # Final check: business name must not be a sentence or description
+        if len(name.split()) > 8:  # Too many words for a business name
             return False
         
-        # Email validation
-        if email and not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
-            # Invalid email format
+        # Must not contain email addresses or phone numbers in the name
+        if '@' in name or re.search(r'\d{3}[-.\s]?\d{3}[-.\s]?\d{4}', name):
             return False
         
         return True
