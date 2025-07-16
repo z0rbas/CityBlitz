@@ -85,6 +85,71 @@ class DirectoryDiscoverer:
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
         ]
+        
+        # Pre-built database of known chambers for major cities
+        self.known_chambers = {
+            'tampa bay': [
+                {'name': 'Tampa Bay Chamber', 'url': 'https://tampabay.com'},
+                {'name': 'Greater Tampa Chamber of Commerce', 'url': 'https://tampachamber.com'},
+                {'name': 'Hillsborough Chamber', 'url': 'https://hillschamber.com'},
+                {'name': 'Pinellas County Chamber', 'url': 'https://pinellaschamber.org'},
+                {'name': 'Clearwater Chamber', 'url': 'https://clearwaterchamber.org'},
+                {'name': 'St. Petersburg Chamber', 'url': 'https://stpete.org'},
+                {'name': 'Brandon Chamber', 'url': 'https://brandonchamber.com'},
+                {'name': 'Westshore Chamber', 'url': 'https://westshorealliance.org'},
+                {'name': 'South Tampa Chamber', 'url': 'https://southtampachamber.org'},
+                {'name': 'Plant City Chamber', 'url': 'https://plantcitychamber.com'},
+                {'name': 'Lutz-Land O Lakes Chamber', 'url': 'https://lutzchamber.com'},
+                {'name': 'Ruskin Chamber', 'url': 'https://ruskinchamber.org'},
+                {'name': 'Riverview Chamber', 'url': 'https://riverviewchamber.com'},
+                {'name': 'Carrollwood Chamber', 'url': 'https://carrollwoodchamber.com'},
+                {'name': 'Westchase Chamber', 'url': 'https://westchasechamber.com'},
+                {'name': 'New Tampa Chamber', 'url': 'https://newtampachamber.org'},
+                {'name': 'Hyde Park Chamber', 'url': 'https://hydeparkchamber.com'},
+                {'name': 'Seminole Chamber', 'url': 'https://seminolechamber.com'},
+                {'name': 'Largo Chamber', 'url': 'https://largochamber.com'},
+                {'name': 'Dunedin Chamber', 'url': 'https://dunedinchamber.com'},
+                {'name': 'Belcher Chamber', 'url': 'https://belcherchamber.org'},
+                {'name': 'Tarpon Springs Chamber', 'url': 'https://tarponspringschamber.com'},
+                {'name': 'Safety Harbor Chamber', 'url': 'https://safetyharborchamber.com'},
+                {'name': 'Oldsmar Chamber', 'url': 'https://oldsmarchamber.com'},
+                {'name': 'Palm Harbor Chamber', 'url': 'https://palmharborchamber.com'},
+                {'name': 'Countryside Chamber', 'url': 'https://countrysidechamber.com'},
+                {'name': 'Indian Rocks Beach Chamber', 'url': 'https://indianrockschamber.com'},
+                {'name': 'Redington Beach Chamber', 'url': 'https://redingtonbeachchamber.com'},
+                {'name': 'Madeira Beach Chamber', 'url': 'https://madeirabeachchamber.com'},
+                {'name': 'Treasure Island Chamber', 'url': 'https://treasureislandchamber.org'},
+                {'name': 'St. Pete Beach Chamber', 'url': 'https://stpetebeachchamber.com'},
+                {'name': 'Gulfport Chamber', 'url': 'https://gulfportchamber.com'},
+                {'name': 'Kenneth City Chamber', 'url': 'https://kennethcitychamber.com'},
+                {'name': 'Pinellas Park Chamber', 'url': 'https://pinellasparkchamber.com'},
+                {'name': 'Bay Pines Chamber', 'url': 'https://baypineschamber.com'}
+            ],
+            'miami': [
+                {'name': 'Miami Chamber of Commerce', 'url': 'https://miamichamber.com'},
+                {'name': 'Greater Miami Chamber', 'url': 'https://greatermiami.com'},
+                {'name': 'Miami-Dade Chamber', 'url': 'https://miamidade.com'},
+                {'name': 'Coral Gables Chamber', 'url': 'https://coralgableschamber.org'},
+                {'name': 'Miami Beach Chamber', 'url': 'https://miamibeachchamber.com'},
+                {'name': 'Aventura Chamber', 'url': 'https://aventurachamber.org'},
+                {'name': 'Homestead Chamber', 'url': 'https://homesteadchamber.com'},
+                {'name': 'Kendall Chamber', 'url': 'https://kendallchamber.com'},
+                {'name': 'Doral Chamber', 'url': 'https://doralchamber.org'},
+                {'name': 'Hialeah Chamber', 'url': 'https://hialeahchamber.org'}
+            ],
+            'orlando': [
+                {'name': 'Orlando Chamber of Commerce', 'url': 'https://orlandochamber.org'},
+                {'name': 'Greater Orlando Chamber', 'url': 'https://greaterorldo.com'},
+                {'name': 'Orange County Chamber', 'url': 'https://orangechamber.org'},
+                {'name': 'Winter Park Chamber', 'url': 'https://winterparkchamber.com'},
+                {'name': 'Kissimmee Chamber', 'url': 'https://kissimmeechamber.com'},
+                {'name': 'Oviedo Chamber', 'url': 'https://oviedochamber.org'},
+                {'name': 'Altamonte Springs Chamber', 'url': 'https://altamontechamber.com'},
+                {'name': 'Apopka Chamber', 'url': 'https://apopkachamber.org'},
+                {'name': 'Maitland Chamber', 'url': 'https://maitlandchamber.com'},
+                {'name': 'Windermere Chamber', 'url': 'https://windermerechamber.com'}
+            ]
+        }
     
     async def create_session(self):
         if not self.session:
@@ -101,6 +166,182 @@ class DirectoryDiscoverer:
         if self.session:
             await self.session.close()
             self.session = None
+    
+    async def search_directories(self, location: str, directory_types: List[str], max_results: int = 20) -> List[Dict]:
+        """Enhanced search combining known chambers with web search"""
+        session = await self.create_session()
+        discovered = []
+        
+        # First, add known chambers for this location
+        location_lower = location.lower()
+        for known_location, chambers in self.known_chambers.items():
+            if known_location in location_lower or location_lower in known_location:
+                for chamber in chambers:
+                    if 'chamber of commerce' in directory_types:
+                        discovered.append({
+                            'name': chamber['name'],
+                            'url': chamber['url'],
+                            'directory_type': 'chamber of commerce',
+                            'location': location,
+                            'description': f"Known chamber in {location}"
+                        })
+        
+        # Then perform web search for additional directories
+        web_results = await self._perform_web_search(session, location, directory_types, max_results)
+        discovered.extend(web_results)
+        
+        # Remove duplicates and validate URLs
+        validated_results = await self._validate_and_deduplicate(session, discovered)
+        
+        return validated_results[:max_results]
+    
+    async def _perform_web_search(self, session, location: str, directory_types: List[str], max_results: int) -> List[Dict]:
+        """Perform comprehensive web search"""
+        discovered = []
+        
+        # Enhanced search patterns
+        search_patterns = {
+            'chamber of commerce': [
+                f"{location} chamber of commerce",
+                f"chamber of commerce {location}",
+                f"{location} chamber",
+                f"chambers {location}",
+                f"business chamber {location}",
+                f"{location} county chamber",
+                f"{location} area chamber",
+                f"{location} regional chamber",
+                f"{location} local chamber",
+                f"{location} business association",
+                f"{location} economic development"
+            ],
+            'business directory': [
+                f"{location} business directory",
+                f"business listing {location}",
+                f"{location} business guide",
+                f"local business {location}",
+                f"{location} yellow pages",
+                f"business association {location}",
+                f"{location} trade directory",
+                f"{location} company directory"
+            ],
+            'better business bureau': [
+                f"better business bureau {location}",
+                f"BBB {location}",
+                f"{location} BBB",
+                f"better business {location}"
+            ]
+        }
+        
+        for directory_type in directory_types:
+            patterns = search_patterns.get(directory_type, [f"{directory_type} {location}"])
+            
+            for pattern in patterns[:6]:  # Limit patterns to avoid too many requests
+                try:
+                    results = await self._search_with_duckduckgo(session, pattern, directory_type, location)
+                    discovered.extend(results)
+                    
+                    # Add delay between searches
+                    await asyncio.sleep(random.uniform(0.5, 1.5))
+                    
+                except Exception as e:
+                    logging.error(f"Error searching for {pattern}: {str(e)}")
+                    continue
+        
+        return discovered
+    
+    async def _search_with_duckduckgo(self, session, query: str, directory_type: str, location: str) -> List[Dict]:
+        """Search with DuckDuckGo"""
+        results = []
+        
+        try:
+            search_url = f"https://html.duckduckgo.com/html/?q={query.replace(' ', '+')}"
+            
+            async with session.get(search_url) as response:
+                if response.status == 200:
+                    content = await response.text()
+                    soup = BeautifulSoup(content, 'html.parser')
+                    
+                    result_links = soup.find_all('a', {'class': 'result__a'})
+                    
+                    for link in result_links[:8]:  # Top 8 results per search
+                        href = link.get('href')
+                        title = link.get_text(strip=True)
+                        
+                        if href and title and self._is_valid_directory_url(href, directory_type, location):
+                            results.append({
+                                'name': title[:150],
+                                'url': href,
+                                'directory_type': directory_type,
+                                'location': location,
+                                'description': title[:200]
+                            })
+        
+        except Exception as e:
+            logging.error(f"Error searching DuckDuckGo for {query}: {str(e)}")
+        
+        return results
+    
+    def _is_valid_directory_url(self, url: str, directory_type: str, location: str) -> bool:
+        """Enhanced validation for directory URLs"""
+        url_lower = url.lower()
+        location_lower = location.lower()
+        
+        # Filter out unwanted domains
+        excluded_domains = [
+            'facebook.com', 'linkedin.com', 'twitter.com', 'instagram.com', 
+            'youtube.com', 'pinterest.com', 'reddit.com', 'wikipedia.org',
+            'google.com', 'bing.com', 'yahoo.com', 'duckduckgo.com',
+            'yelp.com', 'foursquare.com', 'zillow.com', 'realtor.com'
+        ]
+        
+        if any(domain in url_lower for domain in excluded_domains):
+            return False
+        
+        # Look for directory-specific keywords
+        directory_keywords = {
+            'chamber of commerce': ['chamber', 'commerce', 'business', 'economic', 'development'],
+            'business directory': ['directory', 'business', 'listing', 'guide', 'yellowpages', 'companies'],
+            'better business bureau': ['bbb', 'bureau', 'better', 'business']
+        }
+        
+        keywords = directory_keywords.get(directory_type, [])
+        keyword_match = any(keyword in url_lower for keyword in keywords)
+        
+        # Check for location relevance
+        location_words = location_lower.replace(' bay', '').replace(' county', '').split()
+        location_match = any(word in url_lower for word in location_words if len(word) > 2)
+        
+        return keyword_match and (location_match or directory_type == 'chamber of commerce')
+    
+    async def _validate_and_deduplicate(self, session, discovered: List[Dict]) -> List[Dict]:
+        """Validate URLs and remove duplicates"""
+        seen_urls = set()
+        seen_names = set()
+        validated = []
+        
+        for directory in discovered:
+            url = directory['url']
+            name = directory['name'].lower()
+            
+            # Skip duplicates
+            if url in seen_urls or name in seen_names:
+                continue
+                
+            # Quick validation - try to access URL
+            try:
+                async with session.head(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                    if response.status < 400:  # Valid response
+                        seen_urls.add(url)
+                        seen_names.add(name)
+                        validated.append(directory)
+            except:
+                # If head request fails, still include it (might be valid)
+                if url not in seen_urls:
+                    seen_urls.add(url)
+                    seen_names.add(name)
+                    validated.append(directory)
+        
+        return validated
     
     async def search_directories(self, location: str, directory_types: List[str], max_results: int = 20) -> List[Dict]:
         """Search for business directories in a specific location with enhanced search patterns"""
