@@ -802,15 +802,28 @@ async def get_directories():
 
 @api_router.post("/scrape-directory")
 async def scrape_directory(request: ScrapeDirectoryRequest):
-    """Scrape business listings from a specific directory"""
+    """Scrape business listings from a specific directory with detailed logging"""
     try:
         # Find the directory
         directory = await db.directories.find_one({"id": request.directory_id})
         if not directory:
             raise HTTPException(status_code=404, detail="Directory not found")
         
+        progress_log = []
+        
+        def log_progress(message):
+            progress_log.append(f"{datetime.utcnow().strftime('%H:%M:%S')} - {message}")
+            logging.info(message)
+        
+        log_progress(f"🚀 Starting scrape of: {directory['name']}")
+        log_progress(f"🔗 URL: {directory['url']}")
+        log_progress(f"📍 Location: {directory['location']}")
+        log_progress(f"🏢 Type: {directory['directory_type']}")
+        
         # Scrape businesses from the directory
         businesses = await discoverer.scrape_directory_listings(directory['url'])
+        
+        log_progress(f"📊 Found {len(businesses)} businesses")
         
         # Save businesses to database
         saved_businesses = []
@@ -819,6 +832,7 @@ async def scrape_directory(request: ScrapeDirectoryRequest):
             business = BusinessContact(**business_data)
             await db.businesses.insert_one(business.dict())
             saved_businesses.append(business)
+            log_progress(f"💾 Saved: {business.business_name}")
         
         # Update directory status
         await db.directories.update_one(
@@ -829,11 +843,14 @@ async def scrape_directory(request: ScrapeDirectoryRequest):
             }}
         )
         
+        log_progress(f"✅ Scraping complete! Saved {len(saved_businesses)} businesses")
+        
         return {
             "success": True,
             "directory_id": request.directory_id,
             "businesses_found": len(saved_businesses),
-            "businesses": saved_businesses
+            "businesses": saved_businesses,
+            "progress_log": progress_log
         }
         
     except Exception as e:
