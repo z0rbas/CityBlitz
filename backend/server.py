@@ -103,64 +103,155 @@ class DirectoryDiscoverer:
             self.session = None
     
     async def search_directories(self, location: str, directory_types: List[str], max_results: int = 20) -> List[Dict]:
-        """Search for business directories in a specific location"""
+        """Search for business directories in a specific location with enhanced search patterns"""
         session = await self.create_session()
         discovered = []
         
-        for directory_type in directory_types:
-            search_query = f"{directory_type} {location}"
-            # We'll use DuckDuckGo as it's more scraping-friendly than Google
-            search_url = f"https://html.duckduckgo.com/html/?q={search_query.replace(' ', '+')}"
-            
-            try:
-                async with session.get(search_url) as response:
-                    if response.status == 200:
-                        content = await response.text()
-                        soup = BeautifulSoup(content, 'html.parser')
-                        
-                        # Parse DuckDuckGo results
-                        results = soup.find_all('a', {'class': 'result__a'})
-                        
-                        for result in results[:max_results//len(directory_types)]:
-                            href = result.get('href')
-                            title = result.get_text(strip=True)
-                            
-                            if href and self._is_valid_directory_url(href, directory_type):
-                                discovered.append({
-                                    'name': title,
-                                    'url': href,
-                                    'directory_type': directory_type,
-                                    'location': location,
-                                    'description': title
-                                })
-                
-                # Add delay between searches
-                await asyncio.sleep(random.uniform(1, 3))
-                
-            except Exception as e:
-                logging.error(f"Error searching for {directory_type} in {location}: {str(e)}")
-                continue
+        # Enhanced search patterns for better coverage
+        search_patterns = {
+            'chamber of commerce': [
+                f"{location} chamber of commerce",
+                f"chamber of commerce {location}",
+                f"{location} chamber",
+                f"chambers {location}",
+                f"business chamber {location}",
+                f"{location} county chamber",
+                f"{location} area chamber",
+                f"{location} regional chamber",
+                f"{location} local chamber"
+            ],
+            'business directory': [
+                f"{location} business directory",
+                f"business listing {location}",
+                f"{location} business guide",
+                f"local business {location}",
+                f"{location} yellow pages",
+                f"business association {location}",
+                f"{location} trade directory"
+            ],
+            'better business bureau': [
+                f"better business bureau {location}",
+                f"BBB {location}",
+                f"{location} BBB",
+                f"better business {location}"
+            ]
+        }
         
-        return discovered
+        for directory_type in directory_types:
+            patterns = search_patterns.get(directory_type, [f"{directory_type} {location}"])
+            
+            for pattern in patterns:
+                try:
+                    # Search both DuckDuckGo and Bing for better coverage
+                    for search_engine in ['duckduckgo', 'bing']:
+                        results = await self._search_with_engine(session, pattern, search_engine, directory_type, location)
+                        discovered.extend(results)
+                        
+                        # Add delay between searches to avoid rate limiting
+                        await asyncio.sleep(random.uniform(0.5, 1.5))
+                        
+                        # Stop if we have enough results
+                        if len(discovered) >= max_results:
+                            break
+                    
+                    if len(discovered) >= max_results:
+                        break
+                        
+                except Exception as e:
+                    logging.error(f"Error searching for {pattern}: {str(e)}")
+                    continue
+        
+        # Remove duplicates based on URL
+        seen_urls = set()
+        unique_discovered = []
+        for directory in discovered:
+            if directory['url'] not in seen_urls:
+                seen_urls.add(directory['url'])
+                unique_discovered.append(directory)
+        
+        return unique_discovered[:max_results]
     
-    def _is_valid_directory_url(self, url: str, directory_type: str) -> bool:
-        """Check if URL is likely a valid directory"""
+    async def _search_with_engine(self, session, query: str, engine: str, directory_type: str, location: str) -> List[Dict]:
+        """Search with specific search engine"""
+        results = []
+        
+        try:
+            if engine == 'duckduckgo':
+                search_url = f"https://html.duckduckgo.com/html/?q={query.replace(' ', '+')}"
+            elif engine == 'bing':
+                search_url = f"https://www.bing.com/search?q={query.replace(' ', '+')}"
+            else:
+                return results
+            
+            async with session.get(search_url) as response:
+                if response.status == 200:
+                    content = await response.text()
+                    soup = BeautifulSoup(content, 'html.parser')
+                    
+                    if engine == 'duckduckgo':
+                        result_links = soup.find_all('a', {'class': 'result__a'})
+                    elif engine == 'bing':
+                        result_links = soup.find_all('a', {'href': True})
+                    
+                    for link in result_links[:10]:  # Limit to top 10 results per search
+                        href = link.get('href')
+                        title = link.get_text(strip=True)
+                        
+                        if href and title and self._is_valid_directory_url(href, directory_type, location):
+                            results.append({
+                                'name': title[:150],  # Truncate long titles
+                                'url': href,
+                                'directory_type': directory_type,
+                                'location': location,
+                                'description': title[:200]
+                            })
+        
+        except Exception as e:
+            logging.error(f"Error searching with {engine} for {query}: {str(e)}")
+        
+        return results
+    
+    def _is_valid_directory_url(self, url: str, directory_type: str, location: str) -> bool:
+        """Enhanced validation for directory URLs"""
         url_lower = url.lower()
+        location_lower = location.lower()
         
         # Filter out unwanted domains
-        excluded_domains = ['facebook.com', 'linkedin.com', 'twitter.com', 'instagram.com', 'youtube.com', 'yelp.com']
+        excluded_domains = [
+            'facebook.com', 'linkedin.com', 'twitter.com', 'instagram.com', 
+            'youtube.com', 'pinterest.com', 'reddit.com', 'wikipedia.org',
+            'google.com', 'bing.com', 'yahoo.com', 'duckduckgo.com'
+        ]
+        
         if any(domain in url_lower for domain in excluded_domains):
             return False
         
         # Look for directory-specific keywords
         directory_keywords = {
-            'chamber of commerce': ['chamber', 'commerce'],
-            'business directory': ['directory', 'business', 'listing'],
-            'better business bureau': ['bbb', 'bureau', 'better']
+            'chamber of commerce': ['chamber', 'commerce', 'business'],
+            'business directory': ['directory', 'business', 'listing', 'guide', 'yellowpages'],
+            'better business bureau': ['bbb', 'bureau', 'better', 'business']
         }
         
         keywords = directory_keywords.get(directory_type, [])
-        return any(keyword in url_lower for keyword in keywords)
+        
+        # Check for relevant keywords in URL
+        keyword_match = any(keyword in url_lower for keyword in keywords)
+        
+        # Check for location relevance
+        location_words = location_lower.split()
+        location_match = any(word in url_lower for word in location_words if len(word) > 2)
+        
+        # Additional validation for chamber websites
+        if directory_type == 'chamber of commerce':
+            chamber_indicators = [
+                'chamber', 'business', 'commerce', 'economic', 'development',
+                'trade', 'industry', 'merchant', 'commercial'
+            ]
+            chamber_match = any(indicator in url_lower for indicator in chamber_indicators)
+            return keyword_match and (location_match or chamber_match)
+        
+        return keyword_match and location_match
     
     async def scrape_directory_listings(self, directory_url: str) -> List[Dict]:
         """Scrape business listings from a directory page"""
