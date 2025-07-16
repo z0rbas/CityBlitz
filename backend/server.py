@@ -416,34 +416,125 @@ class DirectoryDiscoverer:
         return businesses
     
     async def _find_business_directory_page(self, soup: BeautifulSoup, base_url: str, session) -> Optional[str]:
-        """Find the actual business directory page URL"""
+        """Find the actual business directory page URL with improved detection"""
         
-        # Common business directory keywords in links
-        directory_keywords = [
-            'member', 'business', 'directory', 'listing', 'companies', 'organizations',
-            'members', 'businesses', 'directories', 'listings', 'roster', 'search'
+        # More specific business directory keywords and patterns
+        directory_patterns = [
+            # Direct member directory links
+            (r'member.*directory', 'member directory'),
+            (r'business.*directory', 'business directory'),
+            (r'company.*directory', 'company directory'),
+            (r'member.*listing', 'member listing'),
+            (r'business.*listing', 'business listing'),
+            (r'member.*search', 'member search'),
+            (r'directory.*search', 'directory search'),
+            (r'find.*member', 'find member'),
+            (r'find.*business', 'find business'),
+            (r'member.*roster', 'member roster'),
+            (r'business.*roster', 'business roster'),
+            # Common directory page names
+            (r'members', 'members'),
+            (r'businesses', 'businesses'),
+            (r'directory', 'directory'),
+            (r'listings', 'listings'),
+            (r'roster', 'roster'),
+            (r'search', 'search'),
         ]
         
-        # Look for links that likely lead to business directories
+        # Look for links with high-priority patterns first
+        high_priority_links = []
+        medium_priority_links = []
+        
         for link in soup.find_all('a', href=True):
             href = link.get('href')
             link_text = link.get_text().lower().strip()
             
-            # Check if this looks like a business directory link
-            if any(keyword in link_text for keyword in directory_keywords):
-                if any(keyword in href.lower() for keyword in directory_keywords):
-                    # Convert relative URLs to absolute
-                    full_url = urljoin(base_url, href)
-                    
-                    # Verify this page exists and likely contains business listings
-                    try:
-                        async with session.head(full_url, timeout=aiohttp.ClientTimeout(total=10)) as response:
-                            if response.status == 200:
-                                return full_url
-                    except:
-                        continue
+            if not href:
+                continue
+                
+            # Skip external links, mailto, tel, etc.
+            if href.startswith(('mailto:', 'tel:', 'javascript:', '#')):
+                continue
+            
+            # Convert relative URLs to absolute
+            full_url = urljoin(base_url, href)
+            href_lower = href.lower()
+            
+            # Check for high-priority directory patterns
+            for pattern, description in directory_patterns[:8]:  # First 8 are high priority
+                if re.search(pattern, link_text, re.IGNORECASE) or re.search(pattern, href_lower, re.IGNORECASE):
+                    high_priority_links.append((full_url, description, link_text))
+                    break
+            else:
+                # Check for medium-priority patterns
+                for pattern, description in directory_patterns[8:]:
+                    if re.search(pattern, link_text, re.IGNORECASE) or re.search(pattern, href_lower, re.IGNORECASE):
+                        medium_priority_links.append((full_url, description, link_text))
+                        break
         
+        # Try high-priority links first
+        for url, description, link_text in high_priority_links:
+            logging.info(f"🔍 Testing high-priority directory link: {link_text} -> {url}")
+            if await self._validate_directory_page(url, session):
+                logging.info(f"✅ Found business directory: {url}")
+                return url
+        
+        # Try medium-priority links
+        for url, description, link_text in medium_priority_links:
+            logging.info(f"🔍 Testing medium-priority directory link: {link_text} -> {url}")
+            if await self._validate_directory_page(url, session):
+                logging.info(f"✅ Found business directory: {url}")
+                return url
+        
+        logging.warning("⚠️ No business directory page found")
         return None
+    
+    async def _validate_directory_page(self, url: str, session) -> bool:
+        """Validate if a page actually contains business listings"""
+        try:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as response:
+                if response.status != 200:
+                    return False
+                    
+                content = await response.text()
+                soup = BeautifulSoup(content, 'html.parser')
+                
+                # Count indicators of business listings
+                business_indicators = 0
+                
+                # Look for multiple phone numbers or email addresses
+                phone_count = len(re.findall(r'\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}', content))
+                email_count = len(re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', content))
+                
+                if phone_count > 2:
+                    business_indicators += phone_count
+                if email_count > 2:
+                    business_indicators += email_count
+                
+                # Look for business-like structures
+                business_cards = soup.find_all(['div', 'article', 'section'], class_=re.compile(r'business|member|company|listing|card'))
+                if len(business_cards) > 3:
+                    business_indicators += len(business_cards)
+                
+                # Look for tables with business data
+                tables = soup.find_all('table')
+                for table in tables:
+                    if any(header in table.get_text().lower() for header in ['business', 'company', 'member', 'contact', 'phone', 'email']):
+                        business_indicators += 10
+                
+                # Look for lists with business data
+                lists = soup.find_all(['ul', 'ol'])
+                for list_elem in lists:
+                    list_text = list_elem.get_text().lower()
+                    if any(keyword in list_text for keyword in ['phone', 'email', '@', 'contact']):
+                        business_indicators += 5
+                
+                logging.info(f"📊 Business indicators score: {business_indicators} for {url}")
+                return business_indicators > 5
+                
+        except Exception as e:
+            logging.error(f"❌ Error validating directory page {url}: {str(e)}")
+            return False
     
     async def _extract_business_contacts(self, soup: BeautifulSoup, base_url: str, session) -> List[Dict]:
         """Extract business contacts with proper data fields"""
