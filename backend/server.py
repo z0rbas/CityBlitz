@@ -212,7 +212,7 @@ class DirectoryDiscoverer:
         
         return validated_results[:max_results]
     
-    async def _perform_web_search(self, session, location: str, directory_types: List[str], max_results: int) -> List[Dict]:
+    async def _perform_web_search(self, session, location: str, directory_types: List[str], max_results: int, log_func) -> List[Dict]:
         """Perform comprehensive web search"""
         discovered = []
         
@@ -250,18 +250,21 @@ class DirectoryDiscoverer:
         }
         
         for directory_type in directory_types:
+            log_func(f"🔍 Searching for {directory_type} in {location}")
             patterns = search_patterns.get(directory_type, [f"{directory_type} {location}"])
             
-            for pattern in patterns[:6]:  # Limit patterns to avoid too many requests
+            for i, pattern in enumerate(patterns[:6]):  # Limit patterns to avoid too many requests
                 try:
+                    log_func(f"   🔎 Pattern {i+1}/6: '{pattern}'")
                     results = await self._search_with_duckduckgo(session, pattern, directory_type, location)
                     discovered.extend(results)
+                    log_func(f"   ✅ Found {len(results)} results for '{pattern}'")
                     
                     # Add delay between searches
                     await asyncio.sleep(random.uniform(0.5, 1.5))
                     
                 except Exception as e:
-                    logging.error(f"Error searching for {pattern}: {str(e)}")
+                    log_func(f"   ❌ Error searching '{pattern}': {str(e)}")
                     continue
         
         return discovered
