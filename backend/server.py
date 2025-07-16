@@ -399,8 +399,16 @@ class DirectoryDiscoverer:
             # Step 3: Clean and validate
             clean_businesses = self._clean_businesses_flexible(businesses)
             
-            logging.info(f"✅ Final result: {len(clean_businesses)} businesses extracted")
-            return clean_businesses
+            # Additional validation for enhanced scraper
+            validated_businesses = []
+            for business in clean_businesses:
+                if self._is_valid_business_record(business):
+                    validated_businesses.append(business)
+                else:
+                    logging.info(f"❌ Filtered out invalid business: {business.get('business_name', 'N/A')}")
+            
+            logging.info(f"✅ Final result: {len(validated_businesses)} validated businesses extracted")
+            return validated_businesses
                 
         except Exception as e:
             logging.error(f"❌ Error in enhanced scraping {directory_url}: {str(e)}")
