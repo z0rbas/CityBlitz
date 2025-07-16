@@ -372,35 +372,293 @@ class DirectoryDiscoverer:
         return validated
     
     async def scrape_directory_listings(self, directory_url: str) -> List[Dict]:
-        """Intelligent scraping that finds and extracts only real business data"""
+        """More flexible scraping that actually finds business data"""
         session = await self.create_session()
         businesses = []
         
         try:
-            logging.info(f"🤖 Starting intelligent scrape of {directory_url}")
+            logging.info(f"🔍 Starting flexible scrape of {directory_url}")
             
-            # Step 1: Deep crawl to find actual business directory pages
-            directory_pages = await self._intelligent_directory_discovery(directory_url, session)
+            # Step 1: Try to find business directory pages
+            directory_pages = await self._find_directory_pages_flexible(directory_url, session)
             
+            # Step 2: If no specific directory pages found, scrape the main page
             if not directory_pages:
-                logging.warning(f"⚠️ No business directories found on {directory_url}")
-                return businesses
+                logging.info("📄 No specific directory pages found, trying main page")
+                directory_pages = [directory_url]
             
-            # Step 2: Extract business data from each directory page
+            # Step 3: Extract businesses from all pages
             for page_url in directory_pages:
-                logging.info(f"🔍 Extracting businesses from: {page_url}")
-                page_businesses = await self._extract_businesses_intelligent(page_url, session)
+                logging.info(f"📋 Scraping businesses from: {page_url}")
+                page_businesses = await self._scrape_businesses_flexible(page_url, session)
                 businesses.extend(page_businesses)
+                logging.info(f"   Found {len(page_businesses)} businesses on this page")
             
-            # Step 3: Validate and clean the data
-            clean_businesses = self._validate_and_clean_businesses(businesses)
+            # Step 4: Clean and validate (less strict)
+            clean_businesses = self._clean_businesses_flexible(businesses)
             
-            logging.info(f"✅ Intelligent scrape complete: {len(clean_businesses)} quality businesses extracted")
+            logging.info(f"✅ Final result: {len(clean_businesses)} businesses extracted")
             return clean_businesses
                 
         except Exception as e:
-            logging.error(f"❌ Error in intelligent scraping {directory_url}: {str(e)}")
+            logging.error(f"❌ Error in flexible scraping {directory_url}: {str(e)}")
             return businesses
+    
+    async def _find_directory_pages_flexible(self, base_url: str, session) -> List[str]:
+        """Find business directory pages with more flexible matching"""
+        directory_pages = []
+        
+        try:
+            async with session.get(base_url) as response:
+                if response.status != 200:
+                    return directory_pages
+                
+                content = await response.text()
+                soup = BeautifulSoup(content, 'html.parser')
+            
+            # Look for any links that might lead to business listings
+            potential_links = []
+            
+            for link in soup.find_all('a', href=True):
+                href = link.get('href')
+                text = link.get_text().lower().strip()
+                
+                if not href or href.startswith(('mailto:', 'tel:', 'javascript:', '#')):
+                    continue
+                
+                # More flexible matching - any of these words might indicate a directory
+                directory_words = [
+                    'member', 'business', 'directory', 'listing', 'company', 'organization',
+                    'roster', 'search', 'browse', 'find', 'businesses', 'members',
+                    'companies', 'organizations', 'list', 'database'
+                ]
+                
+                if any(word in text for word in directory_words) or any(word in href.lower() for word in directory_words):
+                    full_url = urljoin(base_url, href)
+                    potential_links.append((full_url, text))
+                    logging.info(f"🔗 Found potential directory link: {text} -> {full_url}")
+            
+            # Test the most promising links
+            for url, text in potential_links[:5]:  # Test top 5 links
+                try:
+                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as response:
+                        if response.status == 200:
+                            content = await response.text()
+                            if self._looks_like_business_directory(content):
+                                directory_pages.append(url)
+                                logging.info(f"✅ Confirmed business directory: {url}")
+                except:
+                    continue
+            
+            return directory_pages
+            
+        except Exception as e:
+            logging.error(f"❌ Error finding directory pages: {str(e)}")
+            return directory_pages
+    
+    def _looks_like_business_directory(self, content: str) -> bool:
+        """More flexible check for business directory content"""
+        # Count basic indicators (much more flexible)
+        phone_count = len(re.findall(r'\d{3}[-.\s]?\d{3}[-.\s]?\d{4}', content))
+        email_count = len(re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', content))
+        
+        # Very low threshold - even 2 contacts might indicate a directory
+        return phone_count >= 2 or email_count >= 2
+    
+    async def _scrape_businesses_flexible(self, url: str, session) -> List[Dict]:
+        """Flexible business extraction"""
+        businesses = []
+        
+        try:
+            async with session.get(url) as response:
+                if response.status != 200:
+                    return businesses
+                
+                content = await response.text()
+                soup = BeautifulSoup(content, 'html.parser')
+                
+                logging.info(f"📄 Page content length: {len(content)} chars")
+            
+            # Strategy 1: Look for any structured data (tables, lists, divs)
+            businesses.extend(self._extract_from_any_structure(soup, url))
+            
+            # Strategy 2: Extract from any element that has contact info
+            businesses.extend(self._extract_from_contact_elements(soup, url))
+            
+            # Strategy 3: Pattern matching across the entire page
+            businesses.extend(self._extract_from_page_patterns(content, url))
+            
+            logging.info(f"📊 Raw extraction: {len(businesses)} potential businesses")
+            return businesses
+            
+        except Exception as e:
+            logging.error(f"❌ Error scraping {url}: {str(e)}")
+            return businesses
+    
+    def _extract_from_any_structure(self, soup: BeautifulSoup, base_url: str) -> List[Dict]:
+        """Extract from any structural element that might contain business data"""
+        businesses = []
+        
+        # Look at ALL tables, lists, and divs
+        elements = soup.find_all(['table', 'ul', 'ol', 'div', 'article', 'section'])
+        
+        for element in elements:
+            element_text = element.get_text()
+            
+            # If element contains phone or email, it might have business data
+            if (re.search(r'\d{3}[-.\s]?\d{3}[-.\s]?\d{4}', element_text) or 
+                re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', element_text)):
+                
+                business = self._extract_business_from_element(element, base_url)
+                if business:
+                    businesses.append(business)
+        
+        return businesses
+    
+    def _extract_from_contact_elements(self, soup: BeautifulSoup, base_url: str) -> List[Dict]:
+        """Extract from any element that has contact information"""
+        businesses = []
+        
+        # Find all elements with phone or email links
+        phone_elements = soup.find_all('a', href=re.compile(r'tel:'))
+        email_elements = soup.find_all('a', href=re.compile(r'mailto:'))
+        
+        # Process phone elements
+        for phone_element in phone_elements:
+            parent = phone_element.parent
+            if parent:
+                business = self._extract_business_from_element(parent, base_url)
+                if business:
+                    businesses.append(business)
+        
+        # Process email elements
+        for email_element in email_elements:
+            parent = email_element.parent
+            if parent:
+                business = self._extract_business_from_element(parent, base_url)
+                if business:
+                    businesses.append(business)
+        
+        return businesses
+    
+    def _extract_from_page_patterns(self, content: str, base_url: str) -> List[Dict]:
+        """Extract businesses using pattern matching on the entire page"""
+        businesses = []
+        
+        # Find all phone numbers and try to extract business info around them
+        phone_matches = re.finditer(r'(\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})', content)
+        
+        for match in phone_matches:
+            phone = match.group(1)
+            start_pos = max(0, match.start() - 200)  # Look 200 chars before
+            end_pos = min(len(content), match.end() + 200)  # Look 200 chars after
+            
+            context = content[start_pos:end_pos]
+            
+            # Try to find a business name in the context
+            lines = context.split('\n')
+            business_name = None
+            
+            for line in lines:
+                line = line.strip()
+                if line and len(line) > 3 and len(line) < 80:
+                    # This might be a business name
+                    if not any(junk in line.lower() for junk in ['phone', 'email', 'contact', 'address']):
+                        business_name = line
+                        break
+            
+            if business_name:
+                business = {
+                    'business_name': business_name,
+                    'phone': self._clean_phone_number(phone)
+                }
+                
+                # Try to find email in the same context
+                email_match = re.search(r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', context)
+                if email_match:
+                    business['email'] = email_match.group(1)
+                
+                businesses.append(business)
+        
+        return businesses
+    
+    def _extract_business_from_element(self, element, base_url: str) -> Optional[Dict]:
+        """Extract business info from any element - more flexible"""
+        business = {}
+        text = element.get_text()
+        
+        # Find potential business name (any text that looks like a name)
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
+        
+        for line in lines:
+            if (len(line) > 3 and len(line) < 100 and 
+                not any(junk in line.lower() for junk in ['phone:', 'email:', 'website:', 'address:', 'contact:'])):
+                business['business_name'] = line
+                break
+        
+        # Extract contact info
+        phone_match = re.search(r'(\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})', text)
+        if phone_match:
+            business['phone'] = self._clean_phone_number(phone_match.group(1))
+        
+        email_match = re.search(r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', text)
+        if email_match:
+            business['email'] = email_match.group(1)
+        
+        # Look for website links
+        links = element.find_all('a', href=True)
+        for link in links:
+            href = link.get('href')
+            if href and ('http' in href or 'www' in href):
+                if not any(social in href.lower() for social in ['facebook', 'twitter', 'instagram', 'linkedin']):
+                    business['website'] = href
+                    break
+        
+        return business if business.get('business_name') else None
+    
+    def _clean_businesses_flexible(self, businesses: List[Dict]) -> List[Dict]:
+        """Clean businesses with more flexible validation"""
+        clean_businesses = []
+        seen_names = set()
+        seen_phones = set()
+        seen_emails = set()
+        
+        for business in businesses:
+            # Basic cleaning
+            name = business.get('business_name', '').strip()
+            if not name or len(name) < 2:
+                continue
+            
+            # Very basic junk filtering (much more lenient)
+            name_lower = name.lower()
+            if any(junk in name_lower for junk in ['copyright', 'all rights reserved', 'terms of service', 'privacy policy']):
+                continue
+            
+            # Clean the data
+            cleaned_business = {
+                'business_name': name,
+                'phone': business.get('phone', '').strip(),
+                'email': business.get('email', '').strip(),
+                'website': business.get('website', '').strip(),
+                'address': business.get('address', '').strip(),
+                'contact_person': business.get('contact_person', '').strip(),
+                'socials': business.get('socials', '').strip()
+            }
+            
+            # Check for duplicates
+            if (name not in seen_names and 
+                cleaned_business.get('phone') not in seen_phones and 
+                cleaned_business.get('email') not in seen_emails):
+                
+                seen_names.add(name)
+                if cleaned_business.get('phone'):
+                    seen_phones.add(cleaned_business['phone'])
+                if cleaned_business.get('email'):
+                    seen_emails.add(cleaned_business['email'])
+                
+                clean_businesses.append(cleaned_business)
+        
+        return clean_businesses
     
     async def _intelligent_directory_discovery(self, base_url: str, session) -> List[str]:
         """Deep crawl to find actual business directory pages"""
