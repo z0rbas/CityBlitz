@@ -68,6 +68,7 @@ class BusinessContact(BaseModel):
     email: Optional[str] = None
     address: Optional[str] = None
     website: Optional[str] = None
+    socials: Optional[str] = None
     category: Optional[str] = None
     description: Optional[str] = None
     scraped_at: datetime = Field(default_factory=datetime.utcnow)
