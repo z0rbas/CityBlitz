@@ -459,14 +459,28 @@ async def root():
 
 @api_router.post("/discover-directories")
 async def discover_directories(request: DirectorySearchRequest):
-    """Discover business directories in a specific location"""
+    """Discover business directories in a specific location with detailed logging"""
     try:
+        # Create a progress tracking system
+        progress_log = []
+        
+        def log_progress(message):
+            progress_log.append(f"{datetime.utcnow().strftime('%H:%M:%S')} - {message}")
+            logging.info(message)
+        
+        log_progress(f"🔍 Starting discovery for location: {request.location}")
+        log_progress(f"📋 Directory types: {request.directory_types}")
+        log_progress(f"🎯 Max results: {request.max_results}")
+        
         # Search for directories
         discovered = await discoverer.search_directories(
             request.location, 
             request.directory_types, 
-            request.max_results
+            request.max_results,
+            progress_callback=log_progress
         )
+        
+        log_progress(f"✅ Discovery complete! Found {len(discovered)} directories")
         
         # Save discovered directories to database
         saved_directories = []
@@ -474,11 +488,13 @@ async def discover_directories(request: DirectorySearchRequest):
             directory = DiscoveredDirectory(**directory_data)
             await db.directories.insert_one(directory.dict())
             saved_directories.append(directory)
+            log_progress(f"💾 Saved: {directory.name}")
         
         return {
             "success": True,
             "count": len(saved_directories),
-            "directories": saved_directories
+            "directories": saved_directories,
+            "progress_log": progress_log
         }
         
     except Exception as e:
