@@ -168,39 +168,48 @@ backend:
 frontend:
   - task: "Directory Discovery Interface"
     implemented: true
-    working: "NA"
+    working: true
     file: "App.js"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Built UI for discovering directories with location input and search functionality"
+      - working: true
+        agent: "testing"
+        comment: "✅ PASSED - Discovery interface works perfectly. Location input accepts different cities (Tampa Bay, Miami, Orlando), discover button shows proper loading state, search results display correctly with directory cards showing name/URL/type, and 'Scrape Now' buttons function properly. Successfully discovered 3 new directories for Orlando location."
   
   - task: "Directory Management Interface"
     implemented: true
-    working: "NA"
+    working: true
     file: "App.js"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Built UI for managing discovered directories with scraping controls and status tracking"
+      - working: true
+        agent: "testing"
+        comment: "✅ PASSED - Directory management interface works excellently. Displays 10 directories with proper information (name, URL, type, location), status badges work correctly (3 scraped/green, 7 pending/yellow, 0 failed/red), 'View Businesses' and 'Export CSV' buttons appear for scraped directories, and navigation to business contacts works properly."
   
   - task: "Business Contacts Display"
     implemented: true
-    working: "NA"
+    working: false
     file: "App.js"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Built responsive table interface for viewing scraped business contacts with export functionality"
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL ISSUE - Business contacts table displays correctly with proper headers (Business Name, Contact, Phone, Email, Website) but shows 0 businesses despite directories indicating 47 and 40 businesses scraped. The fetchBusinesses API call is not being triggered when clicking 'View Businesses'. Directory cards show business counts but the data is not loading in the business contacts tab. This breaks the core functionality of viewing scraped business data."
 
 metadata:
   created_by: "main_agent"
