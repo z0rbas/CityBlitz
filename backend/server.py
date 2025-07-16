@@ -372,46 +372,308 @@ class DirectoryDiscoverer:
         return validated
     
     async def scrape_directory_listings(self, directory_url: str) -> List[Dict]:
-        """Scrape business listings from a directory page by finding the actual business directory"""
+        """Intelligent scraping that finds and extracts only real business data"""
         session = await self.create_session()
         businesses = []
         
         try:
-            logging.info(f"🔍 Starting scrape of {directory_url}")
+            logging.info(f"🤖 Starting intelligent scrape of {directory_url}")
             
-            # Step 1: Get the main chamber page
-            async with session.get(directory_url) as response:
+            # Step 1: Deep crawl to find actual business directory pages
+            directory_pages = await self._intelligent_directory_discovery(directory_url, session)
+            
+            if not directory_pages:
+                logging.warning(f"⚠️ No business directories found on {directory_url}")
+                return businesses
+            
+            # Step 2: Extract business data from each directory page
+            for page_url in directory_pages:
+                logging.info(f"🔍 Extracting businesses from: {page_url}")
+                page_businesses = await self._extract_businesses_intelligent(page_url, session)
+                businesses.extend(page_businesses)
+            
+            # Step 3: Validate and clean the data
+            clean_businesses = self._validate_and_clean_businesses(businesses)
+            
+            logging.info(f"✅ Intelligent scrape complete: {len(clean_businesses)} quality businesses extracted")
+            return clean_businesses
+                
+        except Exception as e:
+            logging.error(f"❌ Error in intelligent scraping {directory_url}: {str(e)}")
+            return businesses
+    
+    async def _intelligent_directory_discovery(self, base_url: str, session) -> List[str]:
+        """Deep crawl to find actual business directory pages"""
+        directory_pages = []
+        
+        try:
+            # Get main page
+            async with session.get(base_url) as response:
                 if response.status != 200:
-                    logging.error(f"❌ Failed to access {directory_url} - Status {response.status}")
+                    return directory_pages
+                
+                content = await response.text()
+                soup = BeautifulSoup(content, 'html.parser')
+            
+            # Strategy 1: Look for direct member directory links
+            directory_links = await self._find_member_directory_links(soup, base_url, session)
+            directory_pages.extend(directory_links)
+            
+            # Strategy 2: Look for search/browse business functionality
+            search_pages = await self._find_business_search_pages(soup, base_url, session)
+            directory_pages.extend(search_pages)
+            
+            # Strategy 3: Look for category-based listings
+            category_pages = await self._find_category_listings(soup, base_url, session)
+            directory_pages.extend(category_pages)
+            
+            # Remove duplicates
+            directory_pages = list(set(directory_pages))
+            logging.info(f"📂 Found {len(directory_pages)} business directory pages")
+            
+            return directory_pages
+            
+        except Exception as e:
+            logging.error(f"❌ Error in directory discovery: {str(e)}")
+            return directory_pages
+    
+    async def _find_member_directory_links(self, soup: BeautifulSoup, base_url: str, session) -> List[str]:
+        """Find direct member directory links"""
+        directory_links = []
+        
+        # High-priority member directory patterns
+        member_patterns = [
+            r'member.*directory',
+            r'business.*directory', 
+            r'member.*listing',
+            r'business.*listing',
+            r'company.*directory',
+            r'directory.*member',
+            r'member.*search',
+            r'business.*search',
+            r'find.*member',
+            r'member.*roster',
+            r'business.*roster'
+        ]
+        
+        for link in soup.find_all('a', href=True):
+            href = link.get('href')
+            text = link.get_text().lower().strip()
+            
+            if not href or href.startswith(('mailto:', 'tel:', 'javascript:', '#')):
+                continue
+            
+            # Check if this looks like a member directory
+            for pattern in member_patterns:
+                if re.search(pattern, text, re.IGNORECASE) or re.search(pattern, href, re.IGNORECASE):
+                    full_url = urljoin(base_url, href)
+                    if await self._validate_business_directory_page(full_url, session):
+                        directory_links.append(full_url)
+                        logging.info(f"✅ Found member directory: {text} -> {full_url}")
+                    break
+        
+        return directory_links
+    
+    async def _find_business_search_pages(self, soup: BeautifulSoup, base_url: str, session) -> List[str]:
+        """Find business search/browse pages"""
+        search_pages = []
+        
+        # Look for search forms or browse links
+        search_forms = soup.find_all('form')
+        for form in search_forms:
+            form_text = form.get_text().lower()
+            if any(keyword in form_text for keyword in ['business', 'member', 'company', 'search', 'find']):
+                action = form.get('action')
+                if action:
+                    search_url = urljoin(base_url, action)
+                    # Try to submit the form to get business listings
+                    try:
+                        async with session.post(search_url, data={}) as response:
+                            if response.status == 200:
+                                content = await response.text()
+                                if self._has_business_listings(content):
+                                    search_pages.append(search_url)
+                                    logging.info(f"✅ Found business search page: {search_url}")
+                    except:
+                        pass
+        
+        return search_pages
+    
+    async def _find_category_listings(self, soup: BeautifulSoup, base_url: str, session) -> List[str]:
+        """Find category-based business listings"""
+        category_pages = []
+        
+        # Look for category links that might lead to business listings
+        category_keywords = ['category', 'industry', 'sector', 'type', 'browse']
+        
+        for link in soup.find_all('a', href=True):
+            href = link.get('href')
+            text = link.get_text().lower().strip()
+            
+            if not href or href.startswith(('mailto:', 'tel:', 'javascript:', '#')):
+                continue
+            
+            # Check if this looks like a category page
+            if any(keyword in text for keyword in category_keywords):
+                full_url = urljoin(base_url, href)
+                if await self._validate_business_directory_page(full_url, session):
+                    category_pages.append(full_url)
+                    logging.info(f"✅ Found category page: {text} -> {full_url}")
+        
+        return category_pages
+    
+    async def _validate_business_directory_page(self, url: str, session) -> bool:
+        """Validate if page contains real business listings"""
+        try:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=20)) as response:
+                if response.status != 200:
+                    return False
+                
+                content = await response.text()
+                return self._has_business_listings(content)
+                
+        except Exception:
+            return False
+    
+    def _has_business_listings(self, content: str) -> bool:
+        """Check if content has real business listings"""
+        # Count business indicators
+        business_score = 0
+        
+        # Phone numbers (strong indicator)
+        phone_count = len(re.findall(r'\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}', content))
+        business_score += min(phone_count, 10) * 3
+        
+        # Email addresses (strong indicator)
+        email_count = len(re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', content))
+        business_score += min(email_count, 10) * 3
+        
+        # Business-like patterns
+        business_patterns = [
+            r'(?:LLC|Inc|Corp|Company|Business|Enterprise|Group|Associates|Partners)',
+            r'(?:Restaurant|Store|Shop|Service|Consulting|Marketing|Real Estate|Law|Medical)',
+            r'(?:Main Street|Business Park|Industrial|Commercial|Office|Suite)'
+        ]
+        
+        for pattern in business_patterns:
+            matches = len(re.findall(pattern, content, re.IGNORECASE))
+            business_score += min(matches, 5) * 2
+        
+        # Table or list structures (good indicator)
+        soup = BeautifulSoup(content, 'html.parser')
+        tables = soup.find_all('table')
+        lists = soup.find_all(['ul', 'ol'])
+        
+        for table in tables:
+            if any(header in table.get_text().lower() for header in ['business', 'company', 'name', 'contact', 'phone']):
+                business_score += 10
+        
+        for list_elem in lists:
+            if len(list_elem.find_all('li')) > 5:  # Long lists might be business listings
+                business_score += 5
+        
+        logging.info(f"📊 Business listing score: {business_score}")
+        return business_score > 15
+    
+    async def _extract_businesses_intelligent(self, url: str, session) -> List[Dict]:
+        """Extract businesses using intelligent methods"""
+        businesses = []
+        
+        try:
+            async with session.get(url) as response:
+                if response.status != 200:
                     return businesses
                 
                 content = await response.text()
                 soup = BeautifulSoup(content, 'html.parser')
-                
-                # Step 2: Find the business directory page
-                directory_page_url = await self._find_business_directory_page(soup, directory_url, session)
-                
-                if not directory_page_url:
-                    logging.info(f"⚠️ No business directory page found, scraping main page")
-                    directory_page_url = directory_url
-                
-                # Step 3: Scrape the business directory page
-                if directory_page_url != directory_url:
-                    logging.info(f"📂 Found business directory at: {directory_page_url}")
-                    async with session.get(directory_page_url) as dir_response:
-                        if dir_response.status == 200:
-                            dir_content = await dir_response.text()
-                            dir_soup = BeautifulSoup(dir_content, 'html.parser')
-                            businesses = await self._extract_business_contacts(dir_soup, directory_page_url, session)
-                        else:
-                            logging.error(f"❌ Failed to access directory page - Status {dir_response.status}")
-                else:
-                    businesses = await self._extract_business_contacts(soup, directory_url, session)
-                
-                logging.info(f"✅ Scraped {len(businesses)} business contacts")
-                
+            
+            # Strategy 1: Extract from structured tables
+            table_businesses = self._extract_from_structured_tables(soup, url)
+            businesses.extend(table_businesses)
+            
+            # Strategy 2: Extract from business cards/containers
+            card_businesses = self._extract_from_business_containers(soup, url)
+            businesses.extend(card_businesses)
+            
+            # Strategy 3: Extract from contact lists
+            list_businesses = self._extract_from_contact_lists(soup, url)
+            businesses.extend(list_businesses)
+            
+            logging.info(f"📋 Extracted {len(businesses)} raw businesses from {url}")
+            return businesses
+            
         except Exception as e:
-            logging.error(f"❌ Error scraping directory {directory_url}: {str(e)}")
+            logging.error(f"❌ Error extracting from {url}: {str(e)}")
+            return businesses
+    
+    def _extract_from_structured_tables(self, soup: BeautifulSoup, base_url: str) -> List[Dict]:
+        """Extract from well-structured tables"""
+        businesses = []
+        
+        tables = soup.find_all('table')
+        for table in tables:
+            # Check if table has business-like headers
+            headers = []
+            header_row = table.find('tr')
+            if header_row:
+                headers = [th.get_text().strip().lower() for th in header_row.find_all(['th', 'td'])]
+            
+            # Skip if no relevant headers
+            if not any(keyword in ' '.join(headers) for keyword in ['business', 'company', 'name', 'contact', 'phone', 'email']):
+                continue
+            
+            # Extract business data from each row
+            rows = table.find_all('tr')[1:]  # Skip header
+            for row in rows:
+                cells = row.find_all(['td', 'th'])
+                if len(cells) < 2:
+                    continue
+                
+                business = self._extract_business_from_table_row_intelligent(cells, headers, base_url)
+                if business:
+                    businesses.append(business)
+        
+        return businesses
+    
+    def _extract_from_business_containers(self, soup: BeautifulSoup, base_url: str) -> List[Dict]:
+        """Extract from business card-style containers"""
+        businesses = []
+        
+        # Look for containers with business-like class names
+        containers = soup.find_all(['div', 'article', 'section'], class_=re.compile(r'business|member|company|listing|card|contact'))
+        
+        for container in containers:
+            # Must have contact info to be considered a business
+            text = container.get_text()
+            if not (re.search(r'\d{3}[-.\s]?\d{3}[-.\s]?\d{4}', text) or 
+                   re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', text)):
+                continue
+            
+            business = self._extract_business_from_container_intelligent(container, base_url)
+            if business:
+                businesses.append(business)
+        
+        return businesses
+    
+    def _extract_from_contact_lists(self, soup: BeautifulSoup, base_url: str) -> List[Dict]:
+        """Extract from contact lists"""
+        businesses = []
+        
+        lists = soup.find_all(['ul', 'ol'])
+        for list_elem in lists:
+            items = list_elem.find_all('li')
+            if len(items) < 3:  # Need multiple items
+                continue
+            
+            # Check if list contains business-like content
+            list_text = list_elem.get_text().lower()
+            if not any(keyword in list_text for keyword in ['phone', 'email', 'contact', 'business', 'company']):
+                continue
+            
+            for item in items:
+                business = self._extract_business_from_list_item_intelligent(item, base_url)
+                if business:
+                    businesses.append(business)
         
         return businesses
     
