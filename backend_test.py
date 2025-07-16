@@ -473,6 +473,7 @@ class BackendTester:
             await self.test_directory_discovery_api()
             await self.test_directory_management_api()
             await self.test_directory_scraping_api()
+            await self.test_enhanced_javascript_scraper()  # New enhanced scraper test
             await self.test_business_data_api()
             await self.test_csv_export_api()
             
