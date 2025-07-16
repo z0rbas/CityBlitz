@@ -889,7 +889,13 @@ class DirectoryDiscoverer:
             'member application', 'application', 'form', 'submit',
             'required field', 'span', 'div', 'class', 'title',
             'register now', 'sign up', 'membership', 'join',
-            'form-req', 'gz-form', 'required', '*', 'field'
+            'form-req', 'gz-form', 'required', 'field', 'select',
+            'please enter', 'enter your', 'your name', 'your email',
+            'your phone', 'your address', 'contact information',
+            'member login', 'password', 'username', 'email address',
+            'phone number', 'first name', 'last name', 'company name',
+            'business name', 'street address', 'city', 'state', 'zip',
+            'country', 'website url', 'fax number', 'mobile number'
         ]
         
         name_lower = name.lower()
@@ -897,11 +903,15 @@ class DirectoryDiscoverer:
             return False
         
         # Skip HTML-like content
-        if '<' in name or '>' in name or name.startswith('*'):
+        if '<' in name or '>' in name or name.startswith('*') or 'class=' in name:
             return False
         
         # Skip if it's mostly symbols or numbers
         if len(re.sub(r'[A-Za-z\s]', '', name)) > len(name) * 0.3:
+            return False
+        
+        # Skip if it starts with common form field indicators
+        if name.startswith(('*', '(', '[', '{', '<')):
             return False
         
         # Business indicators
@@ -929,7 +939,8 @@ class DirectoryDiscoverer:
             words = name.split()
             if len(words) == 1:
                 return any(indicator in name_lower for indicator in business_indicators)
-            return True
+            # Must be at least 2 words and not contain form-related words
+            return len(words) >= 2 and not any(form_word in name_lower for form_word in ['application', 'form', 'login', 'register'])
         
         return False
     
