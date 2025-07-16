@@ -789,14 +789,20 @@ async def get_businesses(directory_id: Optional[str] = None):
 
 @api_router.get("/export-csv/{directory_id}")
 async def export_csv(directory_id: str):
-    """Export businesses to CSV format"""
+    """Export businesses to CSV format with improved fields"""
     try:
         businesses = await db.businesses.find({"directory_id": directory_id}).to_list(1000)
         
-        # Create CSV content
-        csv_content = "Business Name,Contact Person,Phone,Email,Address,Website,Category,Description\n"
+        # Create CSV content with improved headers
+        csv_content = "Business Name,Contact Person,Phone,Email,Website,Socials,Address,Description\n"
         for business in businesses:
-            csv_content += f'"{business.get("business_name", "")}","{business.get("contact_person", "")}","{business.get("phone", "")}","{business.get("email", "")}","{business.get("address", "")}","{business.get("website", "")}","{business.get("category", "")}","{business.get("description", "")}"\n'
+            # Escape quotes in CSV fields
+            def escape_csv(value):
+                if not value:
+                    return ""
+                return str(value).replace('"', '""')
+            
+            csv_content += f'"{escape_csv(business.get("business_name", ""))}","{escape_csv(business.get("contact_person", ""))}","{escape_csv(business.get("phone", ""))}","{escape_csv(business.get("email", ""))}","{escape_csv(business.get("website", ""))}","{escape_csv(business.get("socials", ""))}","{escape_csv(business.get("address", ""))}","{escape_csv(business.get("description", ""))}"\n'
         
         return {
             "success": True,
