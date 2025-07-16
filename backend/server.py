@@ -617,7 +617,7 @@ class DirectoryDiscoverer:
         return business if business.get('business_name') else None
     
     def _clean_businesses_flexible(self, businesses: List[Dict]) -> List[Dict]:
-        """Clean businesses with more flexible validation"""
+        """Clean businesses with strict quality filtering"""
         clean_businesses = []
         seen_names = set()
         seen_phones = set()
@@ -626,20 +626,47 @@ class DirectoryDiscoverer:
         for business in businesses:
             # Basic cleaning
             name = business.get('business_name', '').strip()
-            if not name or len(name) < 2:
+            if not name or len(name) < 3:
                 continue
             
-            # Very basic junk filtering (much more lenient)
+            # STRICT junk filtering - only allow business-like names
             name_lower = name.lower()
-            if any(junk in name_lower for junk in ['copyright', 'all rights reserved', 'terms of service', 'privacy policy']):
+            
+            # Must NOT contain navigation/website content
+            navigation_junk = [
+                'membership', 'join now', 'member benefits', 'networking programs',
+                'member news', 'member spotlight', 'home', 'about', 'contact',
+                'services', 'news', 'events', 'login', 'register', 'search',
+                'navigation', 'menu', 'header', 'footer', 'privacy', 'terms',
+                'cookie', 'copyright', 'rights reserved', 'quick links',
+                'our vision', 'our mission', 'board of directors', 'staff',
+                'leadership', 'awards', 'recognition', 'testimonial', 'blog',
+                'resources', 'programs', 'directory', 'listing', 'spotlight',
+                'ribbon cutting', 'chamber', 'read more', 'learn more',
+                'click here', 'view all', 'see all', 'welcome', 'thank you'
+            ]
+            
+            if any(junk in name_lower for junk in navigation_junk):
+                continue
+            
+            # Must have at least one contact method
+            phone = business.get('phone', '').strip()
+            email = business.get('email', '').strip()
+            website = business.get('website', '').strip()
+            
+            if not any([phone, email, website]):
+                continue
+            
+            # Additional business name validation
+            if not self._is_likely_business_name(name):
                 continue
             
             # Clean the data
             cleaned_business = {
                 'business_name': name,
-                'phone': business.get('phone', '').strip(),
-                'email': business.get('email', '').strip(),
-                'website': business.get('website', '').strip(),
+                'phone': self._clean_phone_number(phone) if phone else '',
+                'email': email.lower() if email else '',
+                'website': website if website else '',
                 'address': business.get('address', '').strip(),
                 'contact_person': business.get('contact_person', '').strip(),
                 'socials': business.get('socials', '').strip()
@@ -659,6 +686,46 @@ class DirectoryDiscoverer:
                 clean_businesses.append(cleaned_business)
         
         return clean_businesses
+    
+    def _is_likely_business_name(self, name: str) -> bool:
+        """Check if name is likely a real business name"""
+        if not name or len(name) < 3 or len(name) > 100:
+            return False
+        
+        # Business indicators
+        business_indicators = [
+            'llc', 'inc', 'corp', 'company', 'co.', 'ltd', 'limited',
+            'group', 'associates', 'partners', 'services', 'solutions',
+            'consulting', 'consultants', 'marketing', 'restaurant',
+            'store', 'shop', 'clinic', 'office', 'center', 'centre',
+            'law', 'legal', 'medical', 'dental', 'health', 'care',
+            'real estate', 'realty', 'insurance', 'financial',
+            'accounting', 'construction', 'building', 'design',
+            'engineering', 'technology', 'tech', 'systems',
+            'management', 'development', 'enterprises', 'industries',
+            'manufacturing', 'agency', 'firm', 'studio', 'gallery',
+            'market', 'trading', 'supply', 'equipment', 'repair',
+            'maintenance', 'cleaning', 'security', 'transport',
+            'logistics', 'hotel', 'motel', 'inn', 'resort',
+            'restaurant', 'cafe', 'bar', 'grill', 'deli', 'bakery',
+            'pharmacy', 'bank', 'credit union', 'auto', 'automotive',
+            'dealership', 'salon', 'spa', 'fitness', 'gym'
+        ]
+        
+        name_lower = name.lower()
+        
+        # If it has clear business indicators, it's likely a business
+        if any(indicator in name_lower for indicator in business_indicators):
+            return True
+        
+        # If it's a proper name format (Title Case), it might be a business
+        words = name.split()
+        if len(words) >= 2:
+            # Check if it looks like a business name (not all caps, has capital letters)
+            if not name.isupper() and any(word[0].isupper() for word in words):
+                return True
+        
+        return False
     
     async def _intelligent_directory_discovery(self, base_url: str, session) -> List[str]:
         """Deep crawl to find actual business directory pages"""
