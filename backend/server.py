@@ -1301,25 +1301,57 @@ async def get_businesses(directory_id: Optional[str] = None):
 
 @api_router.get("/export-csv/{directory_id}")
 async def export_csv(directory_id: str):
-    """Export businesses to CSV format with improved fields"""
+    """Export only clean, quality business data to CSV"""
     try:
         businesses = await db.businesses.find({"directory_id": directory_id}).to_list(1000)
         
-        # Create CSV content with improved headers
-        csv_content = "Business Name,Contact Person,Phone,Email,Website,Socials,Address,Description\n"
+        # Filter for only businesses with quality data
+        quality_businesses = []
         for business in businesses:
-            # Escape quotes in CSV fields
-            def escape_csv(value):
+            # Must have business name and at least one contact method
+            if (business.get('business_name') and 
+                any([business.get('phone'), business.get('email'), business.get('website')])):
+                quality_businesses.append(business)
+        
+        # Create clean CSV with only essential fields
+        csv_content = "Business Name,Contact Person,Phone,Email,Website,Address,Social Media\n"
+        
+        for business in quality_businesses:
+            def clean_field(value):
                 if not value:
                     return ""
-                return str(value).replace('"', '""')
+                # Remove extra whitespace and clean up
+                cleaned = str(value).strip()
+                cleaned = re.sub(r'\s+', ' ', cleaned)
+                # Escape quotes for CSV
+                cleaned = cleaned.replace('"', '""')
+                return cleaned
             
-            csv_content += f'"{escape_csv(business.get("business_name", ""))}","{escape_csv(business.get("contact_person", ""))}","{escape_csv(business.get("phone", ""))}","{escape_csv(business.get("email", ""))}","{escape_csv(business.get("website", ""))}","{escape_csv(business.get("socials", ""))}","{escape_csv(business.get("address", ""))}","{escape_csv(business.get("description", ""))}"\n'
+            # Only include if business name is not junk
+            business_name = clean_field(business.get('business_name', ''))
+            if len(business_name) < 3:
+                continue
+                
+            # Skip if business name contains obvious junk
+            name_lower = business_name.lower()
+            junk_indicators = ['home', 'about', 'contact', 'services', 'login', 'menu', 'navigation']
+            if any(junk in name_lower for junk in junk_indicators):
+                continue
+            
+            contact_person = clean_field(business.get('contact_person', ''))
+            phone = clean_field(business.get('phone', ''))
+            email = clean_field(business.get('email', ''))
+            website = clean_field(business.get('website', ''))
+            address = clean_field(business.get('address', ''))
+            socials = clean_field(business.get('socials', ''))
+            
+            csv_content += f'"{business_name}","{contact_person}","{phone}","{email}","{website}","{address}","{socials}"\n'
         
         return {
             "success": True,
             "csv_content": csv_content,
-            "filename": f"businesses_{directory_id}.csv"
+            "filename": f"quality_businesses_{directory_id}.csv",
+            "total_businesses": len(quality_businesses)
         }
     except Exception as e:
         logging.error(f"Error exporting CSV: {str(e)}")
