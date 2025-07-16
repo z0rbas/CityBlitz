@@ -96,9 +96,10 @@ const App = () => {
   };
 
   const viewBusinesses = async (directory) => {
+    console.log('Viewing businesses for directory:', directory);
     setSelectedDirectory(directory);
-    await fetchBusinesses(directory.id);
     setActiveTab('businesses');
+    await fetchBusinesses(directory.id);
   };
 
   return (
