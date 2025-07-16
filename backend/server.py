@@ -1624,62 +1624,59 @@ async def get_businesses(directory_id: Optional[str] = None):
         logging.error(f"Error fetching businesses: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@api_router.get("/export-csv/{directory_id}")
-async def export_csv(directory_id: str):
-    """Export only clean, quality business data to CSV"""
+@api_router.post("/test-scrape")
+async def test_scrape(request: dict):
+    """Test scraping a specific URL"""
     try:
-        businesses = await db.businesses.find({"directory_id": directory_id}).to_list(1000)
+        url = request.get("url")
+        if not url:
+            raise HTTPException(status_code=400, detail="URL required")
         
-        # Filter for only businesses with quality data
-        quality_businesses = []
-        for business in businesses:
-            # Must have business name and at least one contact method
-            if (business.get('business_name') and 
-                any([business.get('phone'), business.get('email'), business.get('website')])):
-                quality_businesses.append(business)
+        # Add to database temporarily
+        test_directory = {
+            "id": str(uuid.uuid4()),
+            "name": "Test Chamber",
+            "url": url,
+            "directory_type": "chamber of commerce",
+            "location": "Test Location",
+            "description": "Test chamber for direct scraping",
+            "discovered_at": datetime.utcnow(),
+            "scrape_status": "pending",
+            "business_count": 0
+        }
         
-        # Create clean CSV with only essential fields
-        csv_content = "Business Name,Contact Person,Phone,Email,Website,Address,Social Media\n"
+        await db.directories.insert_one(test_directory)
         
-        for business in quality_businesses:
-            def clean_field(value):
-                if not value:
-                    return ""
-                # Remove extra whitespace and clean up
-                cleaned = str(value).strip()
-                cleaned = re.sub(r'\s+', ' ', cleaned)
-                # Escape quotes for CSV
-                cleaned = cleaned.replace('"', '""')
-                return cleaned
-            
-            # Only include if business name is not junk
-            business_name = clean_field(business.get('business_name', ''))
-            if len(business_name) < 3:
-                continue
-                
-            # Skip if business name contains obvious junk
-            name_lower = business_name.lower()
-            junk_indicators = ['home', 'about', 'contact', 'services', 'login', 'menu', 'navigation']
-            if any(junk in name_lower for junk in junk_indicators):
-                continue
-            
-            contact_person = clean_field(business.get('contact_person', ''))
-            phone = clean_field(business.get('phone', ''))
-            email = clean_field(business.get('email', ''))
-            website = clean_field(business.get('website', ''))
-            address = clean_field(business.get('address', ''))
-            socials = clean_field(business.get('socials', ''))
-            
-            csv_content += f'"{business_name}","{contact_person}","{phone}","{email}","{website}","{address}","{socials}"\n'
+        # Scrape the businesses
+        businesses = await discoverer.scrape_directory_listings(url)
+        
+        # Save businesses to database
+        saved_businesses = []
+        for business_data in businesses:
+            business_data['directory_id'] = test_directory['id']
+            business = BusinessContact(**business_data)
+            await db.businesses.insert_one(business.dict())
+            saved_businesses.append(business)
+        
+        # Update directory status
+        await db.directories.update_one(
+            {"id": test_directory['id']},
+            {"$set": {
+                "scrape_status": "scraped",
+                "business_count": len(saved_businesses)
+            }}
+        )
         
         return {
             "success": True,
-            "csv_content": csv_content,
-            "filename": f"quality_businesses_{directory_id}.csv",
-            "total_businesses": len(quality_businesses)
+            "url": url,
+            "businesses_found": len(saved_businesses),
+            "businesses": saved_businesses[:10],  # Show first 10
+            "directory_id": test_directory['id']
         }
+        
     except Exception as e:
-        logging.error(f"Error exporting CSV: {str(e)}")
+        logging.error(f"Error in test scraping: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Legacy routes
