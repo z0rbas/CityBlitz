@@ -1,0 +1,90 @@
+<analysis>
+The previous AI engineer adopted an iterative and problem-solving approach to develop a chamber of commerce business directory scraper. Initially focusing on a basic MVP, the engineer quickly pivoted to an automated discovery and scraping system using modern open-source tools like Playwright and FastAPI. Key challenges addressed included: refining the search algorithm to find more directories, debugging frontend display issues, and significantly improving data extraction quality to filter out junk and capture specific business contact information (name, phone, email, website, socials). Despite achieving functional directory discovery and business data extraction for many chambers, the engineer encountered a persistent issue with dynamic, JavaScript-loaded content on certain websites (e.g., South Tampa Chamber), which requires further advanced scraping techniques. The work progressed through continuous feedback loops, backend and frontend testing, and a focus on delivering clean, actionable data for the user's SDR team.
+</analysis>
+
+<product_requirements>
+The user requires a web scraper to identify and extract business directory information from Chambers of Commerce and other business directories within specific geographic areas, starting with Tampa Bay. The primary goal is to gather lead data (business name, contact person, phone, email, website, social media links, address) for SDRs promoting The Guild Of Honour, a business networking community. Key requirements evolved to include:
+- **Automated Discovery:** The application must automatically find relevant chamber and business directory URLs, rather than relying on manual input. It should be capable of finding various directory types (chambers, BBB, industry associations) and expand to any city.
+- **Modern Open-Source Tools:** Utilise up-to-date (2025) free and open-source technologies for scraping, searching, and crawling.
+- **Intelligent Scraping:** The scraper must intelligently identify actual business directory pages within websites and extract only relevant, structured business data, avoiding navigation, membership, or other useless/duplicated content.
+- **Line-by-Line Progress Logging:** Provide real-time, detailed logs of the discovery and scraping processes to show exactly what the scraper is doing.
+- **Clean CSV Export:** The extracted data must be exportable as a clean CSV, containing only the requested fields and free from junk data.
+- **Scalability:** The system should be capable of working with any U.S. city and handling multiple chambers.
+- **Frontend Display:** All discovered directories and scraped business contacts must be clearly displayed on the frontend with appropriate status indicators.
+
+</product_requirements>
+
+<key_technical_concepts>
+- **FastAPI:** Python web framework for backend API development.
+- **React:** JavaScript library for building the single-page application frontend.
+- **MongoDB:** NoSQL database for storing directory and business data.
+- **Playwright:** Modern browser automation library for web scraping, especially dynamic content.
+- **BeautifulSoup:** Python library for parsing HTML and XML documents.
+- **LLM APIs:** Utilized for intelligent content extraction and pattern recognition (though specific LLM integration details were not explicitly shown in the code edits).
+- **Web Search Scraping:** For automated discovery of directories.
+- **Tailwind CSS:** For styling the frontend UI.
+</key_technical_concepts>
+
+<code_architecture>
+The application follows a full-stack architecture with a React frontend, FastAPI backend, and MongoDB database.
+
+
+
+-   ****:
+    -   **Summary:** This is the core of the backend FastAPI application. It defines API endpoints for directory discovery, scraping, business management, and data export. It houses all the complex logic for web searching, URL validation, intelligent business directory detection, and structured data extraction. It interacts with the MongoDB database to store directories and businesses.
+    -   **Changes Made:**
+        -   Initial rewrite for basic functionality.
+        -   Refinement of the  endpoint and underlying search methods (, ) to improve search accuracy and find more chambers (e.g., finding 30+ for Tampa Bay).
+        -   Implementation of line-by-line progress logging for discovery and scraping.
+        -   Multiple rewrites of the  endpoint and associated , ,  methods to:
+            -   Intelligently find *actual* business directory pages within chamber websites.
+            -   Extract specific data fields (name, phone, email, website, socials, address).
+            -   Apply strict quality filtering and deduplication to remove junk data (navigation, membership info) and ensure only valid business contacts are stored.
+            -   Make the extraction more flexible to avoid zero results, while maintaining quality.
+        -   Updates to the CSV export logic to ensure only clean, quality-filtered data is included.
+        -   Temporary test routes () were added for direct scraping of specific URLs to debug.
+-   ****:
+    -   **Summary:** Lists all Python dependencies required for the backend, ensuring the environment is set up correctly.
+    -   **Changes Made:** Added  and other necessary scraping/parsing libraries as the project evolved.
+-   ****:
+    -   **Summary:** The main React component rendering the user interface. It manages application state, handles user interactions (inputting location, clicking buttons), makes API calls to the backend, and displays directories, business contacts, and progress logs.
+    -   **Changes Made:**
+        -   Initial rewrite for base UI (search input, tabs for Discover/Manage Directories, business table, CSV export button).
+        -   Debugging and fixes for the  and  functions to correctly display business contacts.
+        -   Integration of progress log display for real-time feedback during discovery and scraping.
+        -   Updates to the business contact table structure to accommodate new fields like socials.
+        -   Adjustments to the CSV export button to ensure all extracted fields are included.
+-   ****:
+    -   **Summary:** Contains custom CSS styles for the React components, augmenting Tailwind CSS.
+    -   **Changes Made:** Initial rewrite for basic styling.
+
+The backend uses environment variables (, ) for configuration, not hardcoded values. Backend routes are prefixed with  for Kubernetes ingress routing.
+
+</code_architecture>
+
+<pending_tasks>
+- **Implement enhanced scraper for JavaScript-heavy sites:** The current scraping methods struggle with dynamic content loaded via JavaScript (e.g., GrowthZone CMS used by South Tampa Chamber), leading to 0 businesses found for such directories. This requires advanced browser automation like Playwright.
+</pending_tasks>
+
+<current_work>
+The application currently features a functional web scraper designed to find and extract business directory information from Chambers of Commerce and other business directories.
+**Key functional aspects include:**
+1.  **Automated Directory Discovery:** The system can automatically search for and identify relevant chamber and business directory URLs for any given city (e.g., successfully finding 33 directories for Tampa Bay). This process now includes line-by-line logging displayed on the frontend, showing search patterns, validation steps, and results.
+2.  **Intelligent Business Data Extraction:** The scraper has undergone multiple iterations to refine its ability to:
+    *   Detect actual business directory pages within websites, rather than scraping general content.
+    *   Extract specific, high-quality business contact data, including: Business Name, Contact Person, Phone Number, Email Address, Website URL, Social Media Links (Facebook, LinkedIn, Twitter, Instagram), and Physical Address.
+    *   Apply rigorous filtering to remove junk data (navigation, membership information, general page content) and ensure only valid business leads are processed.
+    *   Deduplicate entries to prevent redundant data.
+3.  **Frontend Display and UX:**
+    *   A React-based user interface allows users to input a location, initiate directory discovery, and view discovered chambers with their scraping status (e.g., Scraped badges).
+    *   A Manage Directories tab displays found directories, and clicking View Businesses now correctly populates a table with the extracted business contacts (e.g., 40 businesses for a specific Tampa Bay directory, and 1000+ in total across various scrapes).
+    *   The frontend also shows the real-time, line-by-line progress logs during both discovery and scraping, enhancing transparency.
+    *   An Export to CSV button is available, which generates a CSV file containing only the cleaned, requested business data fields.
+
+**Current Nuance/Limitation:**
+While highly effective for many chamber websites, the scraper faces a challenge with websites that rely heavily on JavaScript to dynamically load content (e.g., the South Tampa Chamber's GrowthZone CMS). For these specific cases, the scraper currently fails to extract business listings because the data is not present in the initial HTML source, requiring more advanced, browser-driven scraping techniques. The last action was acknowledging this limitation and offering solutions to the user.
+</current_work>
+
+<optional_next_step>
+Implement the enhanced scraper for JavaScript-heavy sites using Playwright.
+</optional_next_step>
