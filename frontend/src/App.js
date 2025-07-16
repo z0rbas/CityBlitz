@@ -396,7 +396,7 @@ const App = () => {
                       Business Name
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Contact
+                      Contact Person
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Phone
@@ -407,12 +407,15 @@ const App = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Website
                     </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Socials
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {businesses.length === 0 ? (
                     <tr>
-                      <td colSpan="5" className="px-6 py-4 text-center text-gray-500">
+                      <td colSpan="6" className="px-6 py-4 text-center text-gray-500">
                         {loading ? 'Loading businesses...' : 'No businesses found. Click "View Businesses" on a scraped directory.'}
                       </td>
                     </tr>
@@ -429,7 +432,11 @@ const App = () => {
                           {business.contact_person || '-'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {business.phone || '-'}
+                          {business.phone ? (
+                            <a href={`tel:${business.phone}`} className="text-blue-600 hover:text-blue-900">
+                              {business.phone}
+                            </a>
+                          ) : '-'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {business.email ? (
@@ -443,6 +450,13 @@ const App = () => {
                             <a href={business.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-900">
                               Visit
                             </a>
+                          ) : '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {business.socials ? (
+                            <div className="max-w-xs truncate" title={business.socials}>
+                              {business.socials}
+                            </div>
                           ) : '-'}
                         </td>
                       </tr>
