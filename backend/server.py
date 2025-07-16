@@ -373,13 +373,44 @@ class DirectoryDiscoverer:
         return validated
     
     async def scrape_directory_listings(self, directory_url: str) -> List[Dict]:
-        """More flexible scraping that actually finds business data"""
+        """Enhanced scraping that handles both static and JavaScript-heavy sites"""
         session = await self.create_session()
         businesses = []
         
         try:
-            logging.info(f"🔍 Starting flexible scrape of {directory_url}")
+            logging.info(f"🔍 Starting enhanced scrape of {directory_url}")
             
+            # Step 1: Try basic scraping first (faster)
+            logging.info("📄 Attempting basic scraping...")
+            businesses = await self._basic_scrape_directory(directory_url, session)
+            
+            # Step 2: If basic scraping finds few/no businesses, try enhanced Playwright scraping
+            if len(businesses) < 3:
+                logging.info(f"⚡ Basic scraping found only {len(businesses)} businesses. Trying enhanced Playwright scraping...")
+                playwright_businesses = await self._enhanced_playwright_scrape(directory_url)
+                
+                # Use Playwright results if significantly better
+                if len(playwright_businesses) > len(businesses):
+                    logging.info(f"✅ Enhanced scraping found {len(playwright_businesses)} businesses (better than {len(businesses)})")
+                    businesses = playwright_businesses
+                else:
+                    logging.info(f"📊 Enhanced scraping found {len(playwright_businesses)} businesses (keeping basic results)")
+            
+            # Step 3: Clean and validate
+            clean_businesses = self._clean_businesses_flexible(businesses)
+            
+            logging.info(f"✅ Final result: {len(clean_businesses)} businesses extracted")
+            return clean_businesses
+                
+        except Exception as e:
+            logging.error(f"❌ Error in enhanced scraping {directory_url}: {str(e)}")
+            return businesses
+    
+    async def _basic_scrape_directory(self, directory_url: str, session) -> List[Dict]:
+        """Basic scraping using BeautifulSoup (original method)"""
+        businesses = []
+        
+        try:
             # Step 1: Try to find business directory pages
             directory_pages = await self._find_directory_pages_flexible(directory_url, session)
             
@@ -390,20 +421,377 @@ class DirectoryDiscoverer:
             
             # Step 3: Extract businesses from all pages
             for page_url in directory_pages:
-                logging.info(f"📋 Scraping businesses from: {page_url}")
+                logging.info(f"📋 Basic scraping businesses from: {page_url}")
                 page_businesses = await self._scrape_businesses_flexible(page_url, session)
                 businesses.extend(page_businesses)
                 logging.info(f"   Found {len(page_businesses)} businesses on this page")
             
-            # Step 4: Clean and validate (less strict)
-            clean_businesses = self._clean_businesses_flexible(businesses)
-            
-            logging.info(f"✅ Final result: {len(clean_businesses)} businesses extracted")
-            return clean_businesses
+            return businesses
                 
         except Exception as e:
-            logging.error(f"❌ Error in flexible scraping {directory_url}: {str(e)}")
+            logging.error(f"❌ Error in basic scraping {directory_url}: {str(e)}")
             return businesses
+    
+    async def _enhanced_playwright_scrape(self, directory_url: str) -> List[Dict]:
+        """Enhanced scraping using Playwright for JavaScript-heavy sites"""
+        businesses = []
+        
+        try:
+            logging.info(f"🎭 Starting Playwright scraping of {directory_url}")
+            
+            async with async_playwright() as p:
+                # Launch browser
+                browser = await p.chromium.launch(headless=True)
+                context = await browser.new_context(
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+                )
+                page = await context.new_page()
+                
+                # Navigate to the main page
+                await page.goto(directory_url, wait_until="networkidle", timeout=60000)
+                logging.info("🌐 Page loaded, looking for business directory links...")
+                
+                # Step 1: Find business directory links on the page
+                directory_links = await self._find_directory_links_playwright(page, directory_url)
+                
+                # Step 2: If no directory links found, scrape the current page
+                if not directory_links:
+                    logging.info("📄 No directory links found, scraping current page...")
+                    directory_links = [directory_url]
+                
+                # Step 3: Scrape businesses from each directory page
+                for link in directory_links:
+                    try:
+                        if link != directory_url:
+                            await page.goto(link, wait_until="networkidle", timeout=60000)
+                            await asyncio.sleep(2)  # Wait for dynamic content
+                        
+                        logging.info(f"📋 Playwright scraping businesses from: {link}")
+                        page_businesses = await self._scrape_businesses_playwright(page, link)
+                        businesses.extend(page_businesses)
+                        logging.info(f"   Found {len(page_businesses)} businesses on this page")
+                        
+                    except Exception as e:
+                        logging.error(f"❌ Error scraping page {link}: {str(e)}")
+                        continue
+                
+                await browser.close()
+                
+        except Exception as e:
+            logging.error(f"❌ Error in Playwright scraping {directory_url}: {str(e)}")
+        
+        return businesses
+    
+    async def _find_directory_links_playwright(self, page, base_url: str) -> List[str]:
+        """Find business directory links using Playwright"""
+        directory_links = []
+        
+        try:
+            # Wait for page to be fully loaded
+            await page.wait_for_load_state('networkidle')
+            
+            # Look for directory-related links
+            directory_patterns = [
+                'member', 'business', 'directory', 'listing', 'company', 'organization',
+                'roster', 'search', 'browse', 'find', 'businesses', 'members'
+            ]
+            
+            # Get all links
+            links = await page.locator('a').all()
+            
+            for link in links:
+                try:
+                    href = await link.get_attribute('href')
+                    text = await link.inner_text()
+                    
+                    if not href or href.startswith(('mailto:', 'tel:', 'javascript:', '#')):
+                        continue
+                    
+                    # Check if link text or href contains directory patterns
+                    text_lower = text.lower().strip()
+                    href_lower = href.lower()
+                    
+                    if any(pattern in text_lower or pattern in href_lower for pattern in directory_patterns):
+                        full_url = urljoin(base_url, href)
+                        directory_links.append(full_url)
+                        logging.info(f"🔗 Found directory link: {text} -> {full_url}")
+                        
+                except Exception as e:
+                    continue
+            
+            # Remove duplicates and limit results
+            directory_links = list(set(directory_links))[:5]
+            
+        except Exception as e:
+            logging.error(f"❌ Error finding directory links: {str(e)}")
+        
+        return directory_links
+    
+    async def _scrape_businesses_playwright(self, page, page_url: str) -> List[Dict]:
+        """Scrape businesses from a page using Playwright"""
+        businesses = []
+        
+        try:
+            # Wait for content to load
+            await page.wait_for_load_state('networkidle')
+            await asyncio.sleep(3)  # Additional wait for dynamic content
+            
+            # Try to find a search or "load more" button that might reveal more businesses
+            search_selectors = [
+                'button:has-text("Search")',
+                'input[type="submit"][value*="Search"]',
+                'button:has-text("Load")',
+                'button:has-text("More")',
+                'button:has-text("Show All")'
+            ]
+            
+            for selector in search_selectors:
+                try:
+                    if await page.locator(selector).count() > 0:
+                        await page.locator(selector).first.click()
+                        await page.wait_for_timeout(3000)  # Wait for results
+                        logging.info(f"📋 Clicked search/load button: {selector}")
+                        break
+                except:
+                    continue
+            
+            # Get page content
+            content = await page.content()
+            
+            # Parse with BeautifulSoup for structured extraction
+            soup = BeautifulSoup(content, 'html.parser')
+            
+            # Strategy 1: Look for business cards or containers
+            business_containers = soup.find_all(['div', 'article', 'section'], 
+                                              class_=re.compile(r'business|member|company|listing|card|item|entry'))
+            
+            logging.info(f"📊 Found {len(business_containers)} potential business containers")
+            
+            for container in business_containers:
+                business = self._extract_business_from_container_playwright(container, page_url)
+                if business:
+                    businesses.append(business)
+            
+            # Strategy 2: Look for table-based listings
+            tables = soup.find_all('table')
+            for table in tables:
+                table_businesses = self._extract_businesses_from_table_playwright(table, page_url)
+                businesses.extend(table_businesses)
+            
+            # Strategy 3: Look for any element with contact information
+            contact_elements = soup.find_all(text=re.compile(r'\d{3}[-.\s]?\d{3}[-.\s]?\d{4}'))
+            for element in contact_elements:
+                parent = element.parent
+                if parent:
+                    business = self._extract_business_from_element_playwright(parent, page_url)
+                    if business:
+                        businesses.append(business)
+            
+            logging.info(f"📋 Extracted {len(businesses)} businesses from Playwright scraping")
+            
+        except Exception as e:
+            logging.error(f"❌ Error in Playwright business scraping: {str(e)}")
+        
+        return businesses
+    
+    def _extract_business_from_container_playwright(self, container, base_url: str) -> Optional[Dict]:
+        """Extract business info from a container using Playwright results"""
+        try:
+            business = {}
+            text = container.get_text().strip()
+            
+            # Skip if container has too little content
+            if len(text) < 10:
+                return None
+            
+            # Find business name (usually in heading or first strong/prominent element)
+            name_element = container.find(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'b', '.name', '.title'])
+            if name_element:
+                name = name_element.get_text().strip()
+                if self._is_valid_business_name(name):
+                    business['business_name'] = name
+            
+            # If no name found, try first line
+            if not business.get('business_name'):
+                lines = [line.strip() for line in text.split('\n') if line.strip()]
+                if lines:
+                    first_line = lines[0]
+                    if self._is_valid_business_name(first_line):
+                        business['business_name'] = first_line
+            
+            # Extract contact information
+            phone_match = re.search(r'(\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})', text)
+            if phone_match:
+                business['phone'] = self._clean_phone_number(phone_match.group(1))
+            
+            email_match = re.search(r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', text)
+            if email_match:
+                business['email'] = email_match.group(1)
+            
+            # Look for website links
+            links = container.find_all('a', href=True)
+            for link in links:
+                href = link.get('href')
+                if href and ('http' in href or 'www' in href):
+                    if not any(social in href.lower() for social in ['facebook', 'twitter', 'instagram', 'linkedin']):
+                        business['website'] = href
+                        break
+            
+            # Look for social media links
+            social_links = []
+            for link in links:
+                href = link.get('href')
+                if href and any(social in href.lower() for social in ['facebook', 'twitter', 'instagram', 'linkedin']):
+                    social_links.append(href)
+            
+            if social_links:
+                business['socials'] = ', '.join(social_links)
+            
+            # Extract address (look for common address patterns)
+            address_match = re.search(r'(\d+\s+[A-Za-z\s]+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|Court|Ct|Circle|Cir|Place|Pl)[A-Za-z\s,]*\d{5})', text)
+            if address_match:
+                business['address'] = address_match.group(1)
+            
+            return business if business.get('business_name') else None
+            
+        except Exception as e:
+            logging.error(f"❌ Error extracting business from container: {str(e)}")
+            return None
+    
+    def _extract_businesses_from_table_playwright(self, table, base_url: str) -> List[Dict]:
+        """Extract businesses from table using Playwright results"""
+        businesses = []
+        
+        try:
+            rows = table.find_all('tr')
+            if len(rows) < 2:  # Need at least header and one data row
+                return businesses
+            
+            # Get headers
+            headers = [th.get_text().strip().lower() for th in rows[0].find_all(['th', 'td'])]
+            
+            # Process data rows
+            for row in rows[1:]:
+                cells = row.find_all(['td', 'th'])
+                if len(cells) >= 2:  # Need at least 2 cells for meaningful data
+                    business = self._extract_business_from_table_row_playwright(cells, headers, base_url)
+                    if business:
+                        businesses.append(business)
+            
+        except Exception as e:
+            logging.error(f"❌ Error extracting businesses from table: {str(e)}")
+        
+        return businesses
+    
+    def _extract_business_from_table_row_playwright(self, cells, headers, base_url: str) -> Optional[Dict]:
+        """Extract business info from table row using Playwright results"""
+        try:
+            business = {}
+            
+            # Map cells to business fields based on headers
+            for i, cell in enumerate(cells):
+                cell_text = cell.get_text().strip()
+                if not cell_text or len(cell_text) < 2:
+                    continue
+                
+                header = headers[i] if i < len(headers) else ""
+                
+                # Map based on header content
+                if any(keyword in header for keyword in ['name', 'business', 'company']) and not business.get('business_name'):
+                    if self._is_valid_business_name(cell_text):
+                        business['business_name'] = cell_text
+                elif any(keyword in header for keyword in ['phone', 'tel']) and not business.get('phone'):
+                    business['phone'] = self._clean_phone_number(cell_text)
+                elif any(keyword in header for keyword in ['email', 'mail']) and not business.get('email'):
+                    email_match = re.search(r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', cell_text)
+                    if email_match:
+                        business['email'] = email_match.group(1)
+                elif any(keyword in header for keyword in ['website', 'web', 'url']) and not business.get('website'):
+                    if 'http' in cell_text or 'www' in cell_text:
+                        business['website'] = cell_text
+                elif any(keyword in header for keyword in ['address', 'location']) and not business.get('address'):
+                    business['address'] = cell_text
+            
+            # If no header mapping worked, use positional logic
+            if not business.get('business_name') and len(cells) >= 2:
+                first_cell = cells[0].get_text().strip()
+                if self._is_valid_business_name(first_cell):
+                    business['business_name'] = first_cell
+            
+            return business if business.get('business_name') else None
+            
+        except Exception as e:
+            logging.error(f"❌ Error extracting business from table row: {str(e)}")
+            return None
+    
+    def _extract_business_from_element_playwright(self, element, base_url: str) -> Optional[Dict]:
+        """Extract business info from any element using Playwright results"""
+        try:
+            business = {}
+            text = element.get_text().strip()
+            
+            # Skip if element has too little content
+            if len(text) < 10:
+                return None
+            
+            # Find business name
+            lines = [line.strip() for line in text.split('\n') if line.strip()]
+            if lines:
+                first_line = lines[0]
+                if self._is_valid_business_name(first_line):
+                    business['business_name'] = first_line
+            
+            # Extract contact info
+            phone_match = re.search(r'(\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})', text)
+            if phone_match:
+                business['phone'] = self._clean_phone_number(phone_match.group(1))
+            
+            email_match = re.search(r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', text)
+            if email_match:
+                business['email'] = email_match.group(1)
+            
+            return business if business.get('business_name') else None
+            
+        except Exception as e:
+            logging.error(f"❌ Error extracting business from element: {str(e)}")
+            return None
+    
+    def _is_valid_business_name(self, name: str) -> bool:
+        """Check if name is likely a real business name"""
+        if not name or len(name) < 3 or len(name) > 100:
+            return False
+        
+        # Skip obvious junk
+        junk_patterns = [
+            'home', 'about', 'contact', 'services', 'news', 'events',
+            'login', 'register', 'search', 'navigation', 'menu',
+            'header', 'footer', 'privacy', 'terms', 'copyright',
+            'click here', 'read more', 'learn more', 'view all'
+        ]
+        
+        name_lower = name.lower()
+        if any(junk in name_lower for junk in junk_patterns):
+            return False
+        
+        # Business indicators
+        business_indicators = [
+            'llc', 'inc', 'corp', 'company', 'co.', 'ltd', 'limited',
+            'group', 'associates', 'partners', 'services', 'solutions',
+            'consulting', 'restaurant', 'store', 'shop', 'clinic',
+            'center', 'law', 'legal', 'medical', 'dental', 'insurance',
+            'real estate', 'accounting', 'construction', 'design',
+            'engineering', 'technology', 'management', 'agency', 'firm'
+        ]
+        
+        # If it has clear business indicators, it's likely a business
+        if any(indicator in name_lower for indicator in business_indicators):
+            return True
+        
+        # If it's properly capitalized and not all caps, might be a business
+        if not name.isupper() and any(word[0].isupper() for word in name.split()):
+            return True
+        
+        return False
     
     async def _find_directory_pages_flexible(self, base_url: str, session) -> List[str]:
         """Find business directory pages with more flexible matching"""
