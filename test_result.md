@@ -213,6 +213,9 @@ frontend:
       - working: false
         agent: "testing"
         comment: "❌ CONFIRMED BUG STILL EXISTS - Comprehensive testing shows: 1) API /api/businesses works correctly (returns 87 businesses), 2) Directory management shows 10 directories with business counts (37, 40 businesses), 3) 'View Businesses' buttons exist and switch to business tab, 4) BUT business table remains empty (0 rows). Root cause: fetchBusinesses function in viewBusinesses() is not being called when clicking 'View Businesses' button. No network requests are made when button is clicked, indicating the onClick handler is not properly triggering the API call. The selectedDirectory state may not be set correctly, preventing the API call with directory_id parameter."
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL BUG CONFIRMED - Detailed investigation reveals the exact issue: 1) 'View Businesses' button click successfully switches to businesses tab (✅), 2) Business table renders with correct headers (✅), 3) API /api/businesses works perfectly (returns 339 businesses when called directly), 4) BUT NO API call is made when clicking 'View Businesses' button (❌). The viewBusinesses() function appears to execute (tab switches) but the fetchBusinesses() call inside it is not executing. No console logs from the function are captured, suggesting either the function is not fully executing or there's an error preventing the API call. The selectedDirectory state is likely not being set properly, or there's an issue in the async/await flow within viewBusinesses(). This completely blocks the core functionality of viewing scraped business data."
 
 metadata:
   created_by: "main_agent"
