@@ -208,6 +208,28 @@ const App = () => {
           </button>
         </div>
 
+        {/* Progress Logs */}
+        {showLogs && progressLogs.length > 0 && (
+          <div className="bg-gray-900 text-green-400 p-4 rounded-lg mb-6 font-mono text-sm">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-white font-semibold">🔍 Processing Log</h3>
+              <button
+                onClick={() => setShowLogs(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="max-h-40 overflow-y-auto">
+              {progressLogs.map((log, index) => (
+                <div key={index} className="mb-1">
+                  {log}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Content */}
         {activeTab === 'discover' && (
           <div className="bg-white rounded-lg shadow-sm p-6">
