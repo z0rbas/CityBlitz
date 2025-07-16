@@ -485,6 +485,16 @@ class DirectoryDiscoverer:
                 
                 await browser.close()
                 
+            # Apply final validation to Playwright results  
+            validated_businesses = []
+            for business in businesses:
+                if self._is_valid_business_record(business):
+                    validated_businesses.append(business)
+                else:
+                    logging.info(f"❌ Filtered out invalid Playwright business: {business.get('business_name', 'N/A')}")
+            
+            businesses = validated_businesses
+                
         except Exception as e:
             logging.error(f"❌ Error in Playwright scraping {directory_url}: {str(e)}")
         
