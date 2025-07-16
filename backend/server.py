@@ -490,10 +490,11 @@ class DirectoryDiscoverer:
             # Wait for page to be fully loaded
             await page.wait_for_load_state('networkidle')
             
-            # Look for directory-related links
+            # Look for directory-related links with specific patterns
             directory_patterns = [
-                'member', 'business', 'directory', 'listing', 'company', 'organization',
-                'roster', 'search', 'browse', 'find', 'businesses', 'members'
+                'member directory', 'business directory', 'member listing', 'business listing',
+                'find members', 'find businesses', 'member search', 'business search',
+                'directory', 'members', 'businesses', 'roster', 'listings'
             ]
             
             # Get all links
@@ -511,13 +512,40 @@ class DirectoryDiscoverer:
                     text_lower = text.lower().strip()
                     href_lower = href.lower()
                     
-                    if any(pattern in text_lower or pattern in href_lower for pattern in directory_patterns):
-                        full_url = urljoin(base_url, href)
-                        directory_links.append(full_url)
-                        logging.info(f"🔗 Found directory link: {text} -> {full_url}")
+                    # Skip obvious non-directory links
+                    if any(skip in text_lower for skip in ['application', 'form', 'join', 'register', 'login']):
+                        continue
+                    
+                    # Look for high-priority directory patterns
+                    for pattern in directory_patterns:
+                        if pattern in text_lower or pattern in href_lower:
+                            full_url = urljoin(base_url, href)
+                            directory_links.append(full_url)
+                            logging.info(f"🔗 Found directory link: {text} -> {full_url}")
+                            break
                         
                 except Exception as e:
                     continue
+            
+            # If no specific directory links found, try common directory URLs
+            if not directory_links:
+                common_directory_paths = [
+                    '/directory', '/members', '/businesses', '/member-directory',
+                    '/business-directory', '/member-listing', '/business-listing',
+                    '/roster', '/search', '/find-members', '/find-businesses'
+                ]
+                
+                for path in common_directory_paths:
+                    test_url = urljoin(base_url, path)
+                    try:
+                        # Test if this URL exists
+                        response = await page.goto(test_url, wait_until="networkidle", timeout=30000)
+                        if response.status == 200:
+                            directory_links.append(test_url)
+                            logging.info(f"🔗 Found common directory path: {test_url}")
+                            break
+                    except Exception as e:
+                        continue
             
             # Remove duplicates and limit results
             directory_links = list(set(directory_links))[:5]
