@@ -341,6 +341,21 @@ const App = () => {
             </div>
 
             <div className="overflow-x-auto">
+              {/* Debug information */}
+              <div className="mb-4 p-2 bg-gray-100 rounded text-sm">
+                <strong>Debug Info:</strong> 
+                <br />Businesses array length: {businesses.length}
+                <br />Selected directory: {selectedDirectory?.name || 'None'}
+                <br />Selected directory ID: {selectedDirectory?.id || 'None'}
+                <br />Loading state: {loading ? 'True' : 'False'}
+                {businesses.length > 0 && (
+                  <>
+                    <br />Sample business: {businesses[0]?.business_name || 'No name'}
+                    <br />Sample phone: {businesses[0]?.phone || 'No phone'}
+                  </>
+                )}
+              </div>
+              
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
@@ -362,36 +377,44 @@ const App = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {businesses.map((business) => (
-                    <tr key={business.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{business.business_name}</div>
-                        {business.address && (
-                          <div className="text-sm text-gray-500">{business.address}</div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {business.contact_person || '-'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {business.phone || '-'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {business.email ? (
-                          <a href={`mailto:${business.email}`} className="text-blue-600 hover:text-blue-900">
-                            {business.email}
-                          </a>
-                        ) : '-'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {business.website ? (
-                          <a href={business.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-900">
-                            Visit
-                          </a>
-                        ) : '-'}
+                  {businesses.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="px-6 py-4 text-center text-gray-500">
+                        {loading ? 'Loading businesses...' : 'No businesses found. Click "View Businesses" on a scraped directory.'}
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    businesses.map((business) => (
+                      <tr key={business.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">{business.business_name}</div>
+                          {business.address && (
+                            <div className="text-sm text-gray-500">{business.address}</div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {business.contact_person || '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {business.phone || '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {business.email ? (
+                            <a href={`mailto:${business.email}`} className="text-blue-600 hover:text-blue-900">
+                              {business.email}
+                            </a>
+                          ) : '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {business.website ? (
+                            <a href={business.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-900">
+                              Visit
+                            </a>
+                          ) : '-'}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
