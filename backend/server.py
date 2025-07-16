@@ -674,21 +674,6 @@ class DirectoryDiscoverer:
         if not self._is_valid_business_name(name):
             return False
         
-        # Additional checks for obvious non-business entries
-        name_lower = name.lower()
-        non_business_indicators = [
-            'member application', 'application', 'form', 'login', 'register',
-            'signup', 'sign up', 'join', 'membership', 'contact us',
-            'about us', 'home page', 'website', 'email', 'phone',
-            'address', 'city', 'state', 'zip', 'country', 'required',
-            'field', 'select', 'enter', 'please', 'your', 'name',
-            'reporter', 'journalist', 'writer', 'editor', 'reach her',
-            'reach him', '@', 'subscribe', 'promo', 'code', 'click here'
-        ]
-        
-        if any(indicator in name_lower for indicator in non_business_indicators):
-            return False
-        
         # Must have at least one contact method
         phone = business.get('phone', '').strip()
         email = business.get('email', '').strip()
