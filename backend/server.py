@@ -168,15 +168,24 @@ class DirectoryDiscoverer:
             self.session = None
     
 
-    async def search_directories(self, location: str, directory_types: List[str], max_results: int = 20) -> List[Dict]:
+    async def search_directories(self, location: str, directory_types: List[str], max_results: int = 20, progress_callback=None) -> List[Dict]:
         """Enhanced search combining known chambers with web search"""
         session = await self.create_session()
         discovered = []
         
+        def log(message):
+            if progress_callback:
+                progress_callback(message)
+            else:
+                logging.info(message)
+        
         # First, add known chambers for this location
+        log(f"🔍 Checking known chambers database for {location}")
         location_lower = location.lower()
+        known_count = 0
         for known_location, chambers in self.known_chambers.items():
             if known_location in location_lower or location_lower in known_location:
+                log(f"📍 Found {len(chambers)} known chambers for {known_location}")
                 for chamber in chambers:
                     if 'chamber of commerce' in directory_types:
                         discovered.append({
@@ -186,13 +195,20 @@ class DirectoryDiscoverer:
                             'location': location,
                             'description': f"Known chamber in {location}"
                         })
+                        known_count += 1
+        
+        log(f"✅ Added {known_count} known chambers")
         
         # Then perform web search for additional directories
-        web_results = await self._perform_web_search(session, location, directory_types, max_results)
+        log(f"🌐 Starting web search for additional directories")
+        web_results = await self._perform_web_search(session, location, directory_types, max_results, log)
         discovered.extend(web_results)
         
         # Remove duplicates and validate URLs
-        validated_results = await self._validate_and_deduplicate(session, discovered)
+        log(f"🔄 Validating and removing duplicates from {len(discovered)} results")
+        validated_results = await self._validate_and_deduplicate(session, discovered, log)
+        
+        log(f"🎯 Final result: {len(validated_results)} validated directories")
         
         return validated_results[:max_results]
     
