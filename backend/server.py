@@ -17,6 +17,7 @@ import json
 from urllib.parse import urljoin, urlparse
 import time
 import random
+from playwright.async_api import async_playwright
 
 
 ROOT_DIR = Path(__file__).parent
