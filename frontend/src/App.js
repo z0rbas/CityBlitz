@@ -196,6 +196,45 @@ const App = () => {
     }
   };
 
+  const exportBusinesses = async (directoryId = null, directoryName = null) => {
+    setExportLoading(true);
+    
+    try {
+      const url = directoryId 
+        ? `${API}/export-businesses?directory_id=${directoryId}`
+        : `${API}/export-businesses`;
+      
+      const response = await axios.get(url, {
+        responseType: 'blob'
+      });
+
+      // Create download
+      const blob = new Blob([response.data], { type: 'text/csv' });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      
+      const filename = directoryName 
+        ? `${directoryName.replace(/[^a-zA-Z0-9]/g, '_')}_businesses.csv`
+        : 'all_businesses.csv';
+      
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+
+      const businessCount = directoryId ? businesses.length : stats.totalBusinesses;
+      alert(`✅ Successfully exported ${businessCount} businesses to ${filename}!`);
+      
+    } catch (error) {
+      console.error('Error exporting businesses:', error);
+      alert(`❌ Export failed: ${error.message}`);
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
   const deleteAllData = async () => {
     // Double confirmation for safety
     const firstConfirm = window.confirm(
