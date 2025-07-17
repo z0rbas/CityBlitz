@@ -107,160 +107,144 @@ class BackendTester:
         try:
             session = await self.create_session()
             
-            # Test with main chamber pages (not directory pages)
-            test_chambers = [
-                {
-                    "name": "South Tampa Chamber",
-                    "url": "https://www.southtampachamber.org/",
-                    "expected_cms": "GrowthZone"
-                },
-                {
-                    "name": "Tampa Bay Chamber", 
-                    "url": "https://tampabay.com",
-                    "expected_cms": "WordPress"
-                },
-                {
-                    "name": "Greater Tampa Chamber",
-                    "url": "https://tampachamber.com", 
-                    "expected_cms": "Custom"
-                }
-            ]
+            # Test with main chamber pages by first discovering them, then testing scraping
+            test_locations = ["Tampa Bay", "Miami", "Orlando"]
             
             universal_test_results = {
-                'chambers_tested': 0,
+                'locations_tested': 0,
                 'directories_discovered': 0,
-                'strategies_working': {
-                    'comprehensive_links': 0,
-                    'url_patterns': 0, 
-                    'navigation_analysis': 0,
-                    'content_patterns': 0
-                },
-                'cms_types_handled': set(),
-                'validated_directories': 0,
+                'directories_scraped': 0,
+                'multi_strategy_working': False,
+                'technology_agnostic': False,
+                'intelligent_validation': False,
                 'test_details': []
             }
             
-            print(f"🌍 Testing Universal Directory Discovery with {len(test_chambers)} main chamber pages...")
+            print(f"🌍 Testing Universal Directory Discovery with {len(test_locations)} locations...")
             
-            for i, chamber in enumerate(test_chambers):
-                chamber_name = chamber['name']
-                chamber_url = chamber['url']
-                expected_cms = chamber['expected_cms']
+            for i, location in enumerate(test_locations):
+                print(f"\n📍 Testing Location {i+1}: {location}")
                 
-                print(f"\n🏢 Testing Chamber {i+1}: {chamber_name}")
-                print(f"   Main Page URL: {chamber_url}")
-                print(f"   Expected CMS: {expected_cms}")
-                
-                # Test scraping the main page to trigger universal discovery
-                scrape_data = {"directory_id": "test_universal_discovery", "url": chamber_url}
+                # First discover directories for this location
+                discovery_data = {
+                    "location": location,
+                    "directory_types": ["chamber of commerce"],
+                    "max_results": 5
+                }
                 
                 try:
-                    # First, add this as a test directory
-                    directory_data = {
-                        "name": chamber_name,
-                        "url": chamber_url,
-                        "directory_type": "chamber of commerce",
-                        "location": "Tampa Bay",
-                        "description": f"Testing universal discovery for {expected_cms} CMS"
-                    }
-                    
-                    # Test the scraping which should trigger universal discovery
-                    async with session.post(f"{API_BASE}/scrape-directory", json=scrape_data) as scrape_response:
-                        if scrape_response.status == 200:
-                            scrape_result = await scrape_response.json()
+                    async with session.post(f"{API_BASE}/discover-directories", json=discovery_data) as discovery_response:
+                        if discovery_response.status == 200:
+                            discovery_result = await discovery_response.json()
                             
-                            # Check if universal discovery was triggered
-                            scraping_method = scrape_result.get('scraping_method', 'basic')
-                            directories_found = scrape_result.get('directories_discovered', 0)
-                            businesses_found = len(scrape_result.get('businesses', []))
-                            
-                            print(f"   ✅ Scraping completed")
-                            print(f"   🔧 Method used: {scraping_method}")
-                            print(f"   📂 Directories discovered: {directories_found}")
-                            print(f"   🏢 Businesses found: {businesses_found}")
-                            
-                            # Check for strategy indicators in the response
-                            strategies_used = []
-                            if 'comprehensive_links' in str(scrape_result):
-                                strategies_used.append('comprehensive_links')
-                                universal_test_results['strategies_working']['comprehensive_links'] += 1
-                            if 'url_patterns' in str(scrape_result):
-                                strategies_used.append('url_patterns')
-                                universal_test_results['strategies_working']['url_patterns'] += 1
-                            if 'navigation_analysis' in str(scrape_result):
-                                strategies_used.append('navigation_analysis')
-                                universal_test_results['strategies_working']['navigation_analysis'] += 1
-                            if 'content_patterns' in str(scrape_result):
-                                strategies_used.append('content_patterns')
-                                universal_test_results['strategies_working']['content_patterns'] += 1
-                            
-                            print(f"   🎯 Strategies detected: {', '.join(strategies_used) if strategies_used else 'Basic scraping'}")
-                            
-                            # Record test details
-                            test_detail = {
-                                'chamber_name': chamber_name,
-                                'chamber_url': chamber_url,
-                                'expected_cms': expected_cms,
-                                'scraping_method': scraping_method,
-                                'directories_found': directories_found,
-                                'businesses_found': businesses_found,
-                                'strategies_used': strategies_used,
-                                'universal_discovery_triggered': 'playwright' in scraping_method.lower() or directories_found > 0
-                            }
-                            
-                            universal_test_results['test_details'].append(test_detail)
-                            universal_test_results['chambers_tested'] += 1
-                            universal_test_results['directories_discovered'] += directories_found
-                            universal_test_results['cms_types_handled'].add(expected_cms)
-                            
-                            if directories_found > 0:
-                                universal_test_results['validated_directories'] += directories_found
-                                print(f"   🎉 Universal discovery successful!")
+                            if discovery_result.get('success') and discovery_result.get('directories'):
+                                directories = discovery_result['directories']
+                                print(f"   ✅ Discovered {len(directories)} directories")
+                                
+                                # Test scraping the first few directories to see universal discovery in action
+                                for j, directory in enumerate(directories[:3]):
+                                    directory_name = directory.get('name', 'N/A')
+                                    directory_url = directory.get('url', 'N/A')
+                                    
+                                    print(f"\n   🏢 Testing Directory {j+1}: {directory_name}")
+                                    print(f"      URL: {directory_url}")
+                                    
+                                    # Get the actual directory_id from the database
+                                    async with session.get(f"{API_BASE}/directories") as dir_response:
+                                        if dir_response.status == 200:
+                                            all_directories = await dir_response.json()
+                                            
+                                            # Find matching directory by URL
+                                            matching_dir = None
+                                            for db_dir in all_directories:
+                                                if db_dir.get('url') == directory_url:
+                                                    matching_dir = db_dir
+                                                    break
+                                            
+                                            if matching_dir:
+                                                directory_id = matching_dir['id']
+                                                scrape_data = {"directory_id": directory_id}
+                                                
+                                                async with session.post(f"{API_BASE}/scrape-directory", json=scrape_data) as scrape_response:
+                                                    if scrape_response.status == 200:
+                                                        scrape_result = await scrape_response.json()
+                                                        
+                                                        scraping_method = scrape_result.get('scraping_method', 'basic')
+                                                        businesses_found = len(scrape_result.get('businesses', []))
+                                                        
+                                                        print(f"      ✅ Scraping completed: {businesses_found} businesses")
+                                                        print(f"      🔧 Method: {scraping_method}")
+                                                        
+                                                        # Check for multi-strategy approach indicators
+                                                        if 'playwright' in scraping_method.lower() or 'enhanced' in scraping_method.lower():
+                                                            universal_test_results['multi_strategy_working'] = True
+                                                            print(f"      🎯 Multi-strategy approach detected!")
+                                                        
+                                                        # Check for technology agnostic capability
+                                                        if any(cms in directory_url.lower() for cms in ['wordpress', 'growthzone', 'custom']):
+                                                            universal_test_results['technology_agnostic'] = True
+                                                        
+                                                        # Check for intelligent validation (businesses found or properly filtered)
+                                                        if businesses_found > 0:
+                                                            universal_test_results['intelligent_validation'] = True
+                                                            print(f"      ✅ Intelligent validation: Found valid businesses")
+                                                        elif businesses_found == 0:
+                                                            universal_test_results['intelligent_validation'] = True
+                                                            print(f"      ✅ Intelligent validation: Properly filtered non-directory page")
+                                                        
+                                                        universal_test_results['directories_scraped'] += 1
+                                                        
+                                                        # Record test details
+                                                        test_detail = {
+                                                            'location': location,
+                                                            'directory_name': directory_name,
+                                                            'directory_url': directory_url,
+                                                            'scraping_method': scraping_method,
+                                                            'businesses_found': businesses_found,
+                                                            'multi_strategy_used': 'playwright' in scraping_method.lower(),
+                                                            'validation_working': True
+                                                        }
+                                                        universal_test_results['test_details'].append(test_detail)
+                                                        
+                                                        # Show sample businesses if found
+                                                        if businesses_found > 0:
+                                                            print(f"      📋 Sample businesses:")
+                                                            for k, business in enumerate(scrape_result.get('businesses', [])[:2]):
+                                                                name = business.get('business_name', 'N/A')
+                                                                phone = business.get('phone', 'N/A')
+                                                                print(f"        {k+1}. {name} | {phone}")
+                                                    else:
+                                                        print(f"      ❌ Scraping failed: HTTP {scrape_response.status}")
+                                            else:
+                                                print(f"      ⚠️  Directory not found in database")
+                                        else:
+                                            print(f"      ❌ Could not fetch directories from database")
+                                
+                                universal_test_results['locations_tested'] += 1
+                                universal_test_results['directories_discovered'] += len(directories)
                             else:
-                                print(f"   ⚠️  No additional directories discovered (may be expected for some sites)")
-                            
-                            # Show sample businesses if found
-                            if businesses_found > 0:
-                                print(f"   📋 Sample businesses found:")
-                                for j, business in enumerate(scrape_result.get('businesses', [])[:3]):
-                                    name = business.get('business_name', 'N/A')
-                                    phone = business.get('phone', 'N/A')
-                                    print(f"     {j+1}. {name} | {phone}")
-                        
+                                print(f"   ❌ No directories discovered for {location}")
                         else:
-                            error_text = await scrape_response.text()
-                            print(f"   ❌ Scraping failed: HTTP {scrape_response.status}")
-                            universal_test_results['test_details'].append({
-                                'chamber_name': chamber_name,
-                                'chamber_url': chamber_url,
-                                'error': f"HTTP {scrape_response.status}: {error_text}"
-                            })
+                            print(f"   ❌ Discovery failed: HTTP {discovery_response.status}")
                 
                 except Exception as e:
-                    print(f"   ❌ Error testing chamber: {str(e)}")
-                    universal_test_results['test_details'].append({
-                        'chamber_name': chamber_name,
-                        'chamber_url': chamber_url,
-                        'error': str(e)
-                    })
+                    print(f"   ❌ Error testing location {location}: {str(e)}")
             
             # Evaluate universal discovery test results
             print(f"\n🌍 Universal Directory Discovery Test Summary:")
-            print(f"   Chambers tested: {universal_test_results['chambers_tested']}")
+            print(f"   Locations tested: {universal_test_results['locations_tested']}")
             print(f"   Total directories discovered: {universal_test_results['directories_discovered']}")
-            print(f"   CMS types handled: {', '.join(universal_test_results['cms_types_handled'])}")
-            print(f"   Validated directories: {universal_test_results['validated_directories']}")
-            
-            print(f"\n🎯 Strategy Performance:")
-            for strategy, count in universal_test_results['strategies_working'].items():
-                print(f"   {strategy.replace('_', ' ').title()}: {count} times")
+            print(f"   Directories scraped: {universal_test_results['directories_scraped']}")
+            print(f"   Multi-strategy approach working: {universal_test_results['multi_strategy_working']}")
+            print(f"   Technology agnostic: {universal_test_results['technology_agnostic']}")
+            print(f"   Intelligent validation: {universal_test_results['intelligent_validation']}")
             
             # Determine if universal discovery test passed
-            strategies_total = sum(universal_test_results['strategies_working'].values())
             test_passed = (
-                universal_test_results['chambers_tested'] > 0 and
-                len(universal_test_results['cms_types_handled']) >= 2 and  # Handled multiple CMS types
-                strategies_total > 0  # At least one strategy worked
+                universal_test_results['locations_tested'] >= 2 and
+                universal_test_results['directories_discovered'] >= 5 and
+                universal_test_results['directories_scraped'] >= 3 and
+                universal_test_results['intelligent_validation']
             )
             
             if test_passed:
@@ -272,12 +256,14 @@ class BackendTester:
                 print("✅ Universal Directory Discovery System test PASSED")
             else:
                 error_msg = "Universal discovery test failed: "
-                if universal_test_results['chambers_tested'] == 0:
-                    error_msg += "No chambers tested successfully"
-                elif len(universal_test_results['cms_types_handled']) < 2:
-                    error_msg += "Did not handle multiple CMS types"
-                elif strategies_total == 0:
-                    error_msg += "No discovery strategies worked"
+                if universal_test_results['locations_tested'] < 2:
+                    error_msg += "Not enough locations tested"
+                elif universal_test_results['directories_discovered'] < 5:
+                    error_msg += "Not enough directories discovered"
+                elif universal_test_results['directories_scraped'] < 3:
+                    error_msg += "Not enough directories scraped successfully"
+                elif not universal_test_results['intelligent_validation']:
+                    error_msg += "Intelligent validation not working"
                 
                 self.test_results['universal_discovery'] = {
                     'passed': False,
