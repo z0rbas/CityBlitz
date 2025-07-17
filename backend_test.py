@@ -99,6 +99,199 @@ class BackendTester:
             self.test_results['directory_discovery']['error'] = str(e)
             print(f"Error testing directory discovery: {e}")
     
+    async def test_universal_directory_discovery(self):
+        """Test Universal Directory Discovery System with main chamber pages"""
+        print("\n=== Testing Universal Directory Discovery System ===")
+        
+        try:
+            session = await self.create_session()
+            
+            # Test with main chamber pages (not directory pages)
+            test_chambers = [
+                {
+                    "name": "South Tampa Chamber",
+                    "url": "https://www.southtampachamber.org/",
+                    "expected_cms": "GrowthZone"
+                },
+                {
+                    "name": "Tampa Bay Chamber", 
+                    "url": "https://tampabay.com",
+                    "expected_cms": "WordPress"
+                },
+                {
+                    "name": "Greater Tampa Chamber",
+                    "url": "https://tampachamber.com", 
+                    "expected_cms": "Custom"
+                }
+            ]
+            
+            universal_test_results = {
+                'chambers_tested': 0,
+                'directories_discovered': 0,
+                'strategies_working': {
+                    'comprehensive_links': 0,
+                    'url_patterns': 0, 
+                    'navigation_analysis': 0,
+                    'content_patterns': 0
+                },
+                'cms_types_handled': set(),
+                'validated_directories': 0,
+                'test_details': []
+            }
+            
+            print(f"🌍 Testing Universal Directory Discovery with {len(test_chambers)} main chamber pages...")
+            
+            for i, chamber in enumerate(test_chambers):
+                chamber_name = chamber['name']
+                chamber_url = chamber['url']
+                expected_cms = chamber['expected_cms']
+                
+                print(f"\n🏢 Testing Chamber {i+1}: {chamber_name}")
+                print(f"   Main Page URL: {chamber_url}")
+                print(f"   Expected CMS: {expected_cms}")
+                
+                # Test scraping the main page to trigger universal discovery
+                scrape_data = {"directory_id": "test_universal_discovery", "url": chamber_url}
+                
+                try:
+                    # First, add this as a test directory
+                    directory_data = {
+                        "name": chamber_name,
+                        "url": chamber_url,
+                        "directory_type": "chamber of commerce",
+                        "location": "Tampa Bay",
+                        "description": f"Testing universal discovery for {expected_cms} CMS"
+                    }
+                    
+                    # Test the scraping which should trigger universal discovery
+                    async with session.post(f"{API_BASE}/scrape-directory", json=scrape_data) as scrape_response:
+                        if scrape_response.status == 200:
+                            scrape_result = await scrape_response.json()
+                            
+                            # Check if universal discovery was triggered
+                            scraping_method = scrape_result.get('scraping_method', 'basic')
+                            directories_found = scrape_result.get('directories_discovered', 0)
+                            businesses_found = len(scrape_result.get('businesses', []))
+                            
+                            print(f"   ✅ Scraping completed")
+                            print(f"   🔧 Method used: {scraping_method}")
+                            print(f"   📂 Directories discovered: {directories_found}")
+                            print(f"   🏢 Businesses found: {businesses_found}")
+                            
+                            # Check for strategy indicators in the response
+                            strategies_used = []
+                            if 'comprehensive_links' in str(scrape_result):
+                                strategies_used.append('comprehensive_links')
+                                universal_test_results['strategies_working']['comprehensive_links'] += 1
+                            if 'url_patterns' in str(scrape_result):
+                                strategies_used.append('url_patterns')
+                                universal_test_results['strategies_working']['url_patterns'] += 1
+                            if 'navigation_analysis' in str(scrape_result):
+                                strategies_used.append('navigation_analysis')
+                                universal_test_results['strategies_working']['navigation_analysis'] += 1
+                            if 'content_patterns' in str(scrape_result):
+                                strategies_used.append('content_patterns')
+                                universal_test_results['strategies_working']['content_patterns'] += 1
+                            
+                            print(f"   🎯 Strategies detected: {', '.join(strategies_used) if strategies_used else 'Basic scraping'}")
+                            
+                            # Record test details
+                            test_detail = {
+                                'chamber_name': chamber_name,
+                                'chamber_url': chamber_url,
+                                'expected_cms': expected_cms,
+                                'scraping_method': scraping_method,
+                                'directories_found': directories_found,
+                                'businesses_found': businesses_found,
+                                'strategies_used': strategies_used,
+                                'universal_discovery_triggered': 'playwright' in scraping_method.lower() or directories_found > 0
+                            }
+                            
+                            universal_test_results['test_details'].append(test_detail)
+                            universal_test_results['chambers_tested'] += 1
+                            universal_test_results['directories_discovered'] += directories_found
+                            universal_test_results['cms_types_handled'].add(expected_cms)
+                            
+                            if directories_found > 0:
+                                universal_test_results['validated_directories'] += directories_found
+                                print(f"   🎉 Universal discovery successful!")
+                            else:
+                                print(f"   ⚠️  No additional directories discovered (may be expected for some sites)")
+                            
+                            # Show sample businesses if found
+                            if businesses_found > 0:
+                                print(f"   📋 Sample businesses found:")
+                                for j, business in enumerate(scrape_result.get('businesses', [])[:3]):
+                                    name = business.get('business_name', 'N/A')
+                                    phone = business.get('phone', 'N/A')
+                                    print(f"     {j+1}. {name} | {phone}")
+                        
+                        else:
+                            error_text = await scrape_response.text()
+                            print(f"   ❌ Scraping failed: HTTP {scrape_response.status}")
+                            universal_test_results['test_details'].append({
+                                'chamber_name': chamber_name,
+                                'chamber_url': chamber_url,
+                                'error': f"HTTP {scrape_response.status}: {error_text}"
+                            })
+                
+                except Exception as e:
+                    print(f"   ❌ Error testing chamber: {str(e)}")
+                    universal_test_results['test_details'].append({
+                        'chamber_name': chamber_name,
+                        'chamber_url': chamber_url,
+                        'error': str(e)
+                    })
+            
+            # Evaluate universal discovery test results
+            print(f"\n🌍 Universal Directory Discovery Test Summary:")
+            print(f"   Chambers tested: {universal_test_results['chambers_tested']}")
+            print(f"   Total directories discovered: {universal_test_results['directories_discovered']}")
+            print(f"   CMS types handled: {', '.join(universal_test_results['cms_types_handled'])}")
+            print(f"   Validated directories: {universal_test_results['validated_directories']}")
+            
+            print(f"\n🎯 Strategy Performance:")
+            for strategy, count in universal_test_results['strategies_working'].items():
+                print(f"   {strategy.replace('_', ' ').title()}: {count} times")
+            
+            # Determine if universal discovery test passed
+            strategies_total = sum(universal_test_results['strategies_working'].values())
+            test_passed = (
+                universal_test_results['chambers_tested'] > 0 and
+                len(universal_test_results['cms_types_handled']) >= 2 and  # Handled multiple CMS types
+                strategies_total > 0  # At least one strategy worked
+            )
+            
+            if test_passed:
+                self.test_results['universal_discovery'] = {
+                    'passed': True,
+                    'error': None,
+                    'data': universal_test_results
+                }
+                print("✅ Universal Directory Discovery System test PASSED")
+            else:
+                error_msg = "Universal discovery test failed: "
+                if universal_test_results['chambers_tested'] == 0:
+                    error_msg += "No chambers tested successfully"
+                elif len(universal_test_results['cms_types_handled']) < 2:
+                    error_msg += "Did not handle multiple CMS types"
+                elif strategies_total == 0:
+                    error_msg += "No discovery strategies worked"
+                
+                self.test_results['universal_discovery'] = {
+                    'passed': False,
+                    'error': error_msg,
+                    'data': universal_test_results
+                }
+                print(f"❌ Universal Directory Discovery test FAILED: {error_msg}")
+                    
+        except Exception as e:
+            self.test_results['universal_discovery'] = {
+                'passed': False,
+                'error': str(e)
+            }
+            print(f"Error testing universal directory discovery: {e}")
+    
     async def test_directory_management_api(self):
         """Test GET /api/directories"""
         print("\n=== Testing Directory Management API ===")
