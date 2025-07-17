@@ -99,30 +99,6 @@ const App = () => {
     }
   };
 
-  const scrapeDirectory = async (directoryId) => {
-    setLoading(true);
-    setProgressLogs([]);
-    setShowLogs(true);
-    
-    try {
-      const response = await axios.post(`${API}/scrape-directory`, {
-        directory_id: directoryId
-      });
-      
-      setProgressLogs(response.data.progress_log || []);
-      alert(`Successfully scraped ${response.data.businesses_found} businesses!`);
-      await fetchDirectories();
-      if (selectedDirectory?.id === directoryId) {
-        await fetchBusinesses(directoryId);
-      }
-    } catch (error) {
-      console.error('Error scraping directory:', error);
-      alert('Error scraping directory. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const exportToCsv = async (directoryId) => {
     try {
       const response = await axios.get(`${API}/export-csv/${directoryId}`);
