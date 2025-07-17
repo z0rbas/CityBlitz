@@ -196,42 +196,65 @@ const App = () => {
     }
   };
 
-  const exportBusinesses = async (directoryId = null, directoryName = null) => {
-    setExportLoading(true);
+  const deleteAllData = async () => {
+    // Double confirmation for safety
+    const firstConfirm = window.confirm(
+      '⚠️ WARNING: This will delete ALL directories and business data permanently!\n\n' +
+      'Are you absolutely sure you want to delete everything?\n\n' +
+      'This action cannot be undone!'
+    );
+    
+    if (!firstConfirm) return;
+    
+    const secondConfirm = window.confirm(
+      '🚨 FINAL CONFIRMATION\n\n' +
+      `You are about to delete:\n` +
+      `• ${stats.totalDirectories} directories\n` +
+      `• ${stats.totalBusinesses} business contacts\n\n` +
+      'Type "DELETE" in the next prompt to confirm...'
+    );
+    
+    if (!secondConfirm) return;
+    
+    const finalConfirm = window.prompt(
+      'Type "DELETE" (in capital letters) to confirm deletion:'
+    );
+    
+    if (finalConfirm !== 'DELETE') {
+      alert('❌ Deletion cancelled - text did not match "DELETE"');
+      return;
+    }
+    
+    setLoading(true);
     
     try {
-      const url = directoryId 
-        ? `${API}/export-businesses?directory_id=${directoryId}`
-        : `${API}/export-businesses`;
+      const response = await axios.delete(`${API}/delete-all-data`);
       
-      const response = await axios.get(url, {
-        responseType: 'blob'
-      });
-
-      // Create download
-      const blob = new Blob([response.data], { type: 'text/csv' });
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      
-      const filename = directoryName 
-        ? `${directoryName.replace(/[^a-zA-Z0-9]/g, '_')}_businesses.csv`
-        : 'all_businesses.csv';
-      
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(downloadUrl);
-
-      const businessCount = directoryId ? businesses.length : stats.totalBusinesses;
-      alert(`✅ Successfully exported ${businessCount} businesses to ${filename}!`);
+      if (response.data.success) {
+        alert(`✅ Successfully deleted all data!\n\n${response.data.message}`);
+        
+        // Reset all state
+        setDirectories([]);
+        setBusinesses([]);
+        setSelectedDirectory(null);
+        setSearchResults([]);
+        setStats({
+          totalDirectories: 0,
+          scrapedDirectories: 0,
+          totalBusinesses: 0,
+          businessesWithPhone: 0,
+          businessesWithEmail: 0
+        });
+        
+        // Go back to discover tab
+        setActiveTab('discover');
+      }
       
     } catch (error) {
-      console.error('Error exporting businesses:', error);
-      alert(`❌ Export failed: ${error.message}`);
+      console.error('Error deleting all data:', error);
+      alert(`❌ Error deleting data: ${error.message}`);
     } finally {
-      setExportLoading(false);
+      setLoading(false);
     }
   };
 
