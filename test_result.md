@@ -235,6 +235,36 @@ frontend:
         agent: "testing"
         comment: "❌ COMPREHENSIVE TESTING CONFIRMS CRITICAL BUG - Extensive testing of the enhanced JavaScript scraper implementation reveals: 1) ✅ Directory Discovery works perfectly (found 174 directories, successfully discovered Tampa Bay and Miami chambers with progress logs), 2) ✅ Enhanced Scraping is functional (74 scraped directories, progress logs show enhanced scraper activation), 3) ✅ Data Quality validation is working (proper filtering visible in logs), 4) ✅ CSV Export works from directory management page, 5) ❌ CRITICAL BUG: Business Contacts Display completely broken - Debug info shows 'Businesses array length: 0, Selected directory: None, Selected directory ID: None, Loading state: False'. The viewBusinesses() function switches tabs but fails to set selectedDirectory state or trigger fetchBusinesses API call. This prevents users from viewing any scraped business data despite successful scraping. The enhanced scraper works correctly but the UI cannot display results."
 
+  - task: "Export Businesses API"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented new /export-businesses endpoint that exports all businesses or filtered by directory_id to CSV format with proper headers and content-type"
+      - working: true
+        agent: "testing"
+        comment: "✅ PASSED - Export Businesses API working perfectly. Successfully tested both export all businesses (9 businesses exported to CSV with proper headers: business_name, contact_person, phone, email, website, address, socials, directory_name) and directory-specific export (6 lines for specific directory). CSV format validation passed, proper content-type headers returned, and sample data shows correct business information extraction. API handles empty database gracefully with 404 response when no businesses found."
+
+  - task: "Delete All Data API"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented critical safety feature /delete-all-data endpoint for SDR teams to clear test data or start fresh. Includes proper counting before deletion and verification after deletion"
+      - working: true
+        agent: "testing"
+        comment: "✅ PASSED - Delete All Data API working flawlessly. Successfully tested complete data cleanup: deleted 55 directories and 9 businesses from database. API properly counts data before deletion, performs complete cleanup, returns success response with deletion counts, and verification confirms database is completely empty after operation (0 directories, 0 businesses remaining). Critical safety feature is fully operational for SDR teams to clear test data and start fresh."
+
 metadata:
   created_by: "main_agent"
   version: "1.0"
