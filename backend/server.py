@@ -2473,6 +2473,92 @@ async def get_businesses(directory_id: Optional[str] = None):
         logging.error(f"Error fetching businesses: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.delete("/delete-all-data")
+async def delete_all_data():
+    """Delete all directories and businesses data"""
+    try:
+        logging.info("🗑️ Starting delete all data operation...")
+        
+        # Get counts before deletion
+        directories_count = await db.directories.count_documents({})
+        businesses_count = await db.businesses.count_documents({})
+        
+        # Delete all businesses
+        businesses_result = await db.businesses.delete_many({})
+        logging.info(f"🗑️ Deleted {businesses_result.deleted_count} businesses")
+        
+        # Delete all directories
+        directories_result = await db.directories.delete_many({})
+        logging.info(f"🗑️ Deleted {directories_result.deleted_count} directories")
+        
+        return {
+            "success": True,
+            "message": f"Successfully deleted all data: {directories_count} directories and {businesses_count} businesses",
+            "directories_deleted": directories_result.deleted_count,
+            "businesses_deleted": businesses_result.deleted_count
+        }
+        
+    except Exception as e:
+        logging.error(f"❌ Error deleting all data: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting data: {str(e)}")
+
+@api_router.get("/export-businesses")
+async def export_businesses(directory_id: Optional[str] = None):
+    """Export businesses to CSV"""
+    try:
+        import io
+        import csv
+        
+        # Build query
+        query = {}
+        if directory_id:
+            query["directory_id"] = directory_id
+        
+        # Fetch businesses
+        businesses = await db.businesses.find(query).to_list(None)
+        
+        if not businesses:
+            raise HTTPException(status_code=404, detail="No businesses found")
+        
+        # Create CSV content
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=[
+            'business_name', 'contact_person', 'phone', 'email', 
+            'website', 'address', 'socials', 'directory_name'
+        ])
+        
+        writer.writeheader()
+        for business in businesses:
+            # Get directory name
+            directory = await db.directories.find_one({"id": business.get("directory_id")})
+            directory_name = directory.get("name", "Unknown") if directory else "Unknown"
+            
+            writer.writerow({
+                'business_name': business.get('business_name', ''),
+                'contact_person': business.get('contact_person', ''),
+                'phone': business.get('phone', ''),
+                'email': business.get('email', ''),
+                'website': business.get('website', ''),
+                'address': business.get('address', ''),
+                'socials': business.get('socials', ''),
+                'directory_name': directory_name
+            })
+        
+        # Return CSV response
+        from fastapi.responses import Response
+        
+        filename = f"businesses_{directory_id if directory_id else 'all'}.csv"
+        
+        return Response(
+            content=output.getvalue(),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+        
+    except Exception as e:
+        logging.error(f"Error exporting businesses: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @api_router.post("/test-scrape")
 async def test_scrape(request: dict):
     """Test scraping a specific URL"""
