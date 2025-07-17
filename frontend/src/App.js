@@ -237,58 +237,91 @@ const App = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
+      {/* Header with branding and stats */}
+      <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white">
         <div className="max-w-7xl mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Chamber Directory Scraper</h1>
-              <p className="text-gray-600 mt-1">Discover and scrape business directories automatically</p>
+              <h1 className="text-3xl font-bold">🏢 Business Directory Scraper</h1>
+              <p className="text-blue-100 mt-1">Generate high-quality leads for The Guild Of Honour SDR team</p>
             </div>
-            <div className="flex items-center space-x-4">
-              <div className="bg-blue-50 px-4 py-2 rounded-lg">
-                <span className="text-sm font-medium text-blue-800">Directories: {directories.length}</span>
-              </div>
-              <div className="bg-green-50 px-4 py-2 rounded-lg">
-                <span className="text-sm font-medium text-green-800">Businesses: {businesses.length}</span>
+            <div className="bg-white/10 rounded-lg p-4">
+              <div className="grid grid-cols-2 gap-4 text-center">
+                <div>
+                  <div className="text-2xl font-bold">{stats.totalBusinesses.toLocaleString()}</div>
+                  <div className="text-xs text-blue-100">Total Businesses</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold">{stats.scrapedDirectories}</div>
+                  <div className="text-xs text-blue-100">Ready Directories</div>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Navigation Tabs */}
+      {/* SDR Guide Section */}
       <div className="max-w-7xl mx-auto px-4 py-6">
+        <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <div className="text-blue-400 text-xl">💡</div>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-lg font-medium text-blue-800">SDR Quick Start Guide</h3>
+              <div className="mt-2 text-sm text-blue-700">
+                <p className="mb-2"><strong>Step 1:</strong> Search for chambers in your target city using "Discover New Leads"</p>
+                <p className="mb-2"><strong>Step 2:</strong> Scrape business data from discovered directories using "Manage Directories"</p>
+                <p><strong>Step 3:</strong> View and export business contacts for outreach using "View Businesses"</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Navigation Tabs */}
         <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg mb-6">
           <button
             onClick={() => setActiveTab('discover')}
-            className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${
+            className={`flex-1 py-3 px-4 text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2 ${
               activeTab === 'discover' 
                 ? 'bg-white text-blue-600 shadow-sm' 
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            🔍 Discover Directories
+            <span className="text-lg">🔍</span>
+            <div className="text-left">
+              <div className="font-semibold">Discover New Leads</div>
+              <div className="text-xs opacity-75">Find chambers in any city</div>
+            </div>
           </button>
           <button
             onClick={() => setActiveTab('directories')}
-            className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${
+            className={`flex-1 py-3 px-4 text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2 ${
               activeTab === 'directories' 
                 ? 'bg-white text-blue-600 shadow-sm' 
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            📁 Manage Directories
+            <span className="text-lg">📁</span>
+            <div className="text-left">
+              <div className="font-semibold">Manage Directories</div>
+              <div className="text-xs opacity-75">Scrape business data</div>
+            </div>
           </button>
           <button
             onClick={() => setActiveTab('businesses')}
-            className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${
+            className={`flex-1 py-3 px-4 text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2 ${
               activeTab === 'businesses' 
                 ? 'bg-white text-blue-600 shadow-sm' 
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            👥 View Businesses
+            <span className="text-lg">👥</span>
+            <div className="text-left">
+              <div className="font-semibold">View Businesses</div>
+              <div className="text-xs opacity-75">Export contact lists</div>
+            </div>
           </button>
         </div>
 
