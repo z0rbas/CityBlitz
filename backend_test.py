@@ -39,7 +39,9 @@ class BackendTester:
             'directory_scraping': {'passed': False, 'error': None, 'data': None},
             'enhanced_scraper': {'passed': False, 'error': None, 'data': None},
             'business_data': {'passed': False, 'error': None, 'data': None},
-            'csv_export': {'passed': False, 'error': None, 'data': None}
+            'csv_export': {'passed': False, 'error': None, 'data': None},
+            'export_businesses': {'passed': False, 'error': None, 'data': None},
+            'delete_all_data': {'passed': False, 'error': None, 'data': None}
         }
         self.discovered_directories = []
         
