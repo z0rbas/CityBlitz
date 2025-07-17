@@ -658,117 +658,295 @@ const App = () => {
 
         {activeTab === 'businesses' && (
           <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-900">
-                Business Contacts
-                {selectedDirectory && (
-                  <span className="text-sm font-normal text-gray-500 ml-2">
-                    from {selectedDirectory.name}
-                  </span>
-                )}
-              </h2>
-              {selectedDirectory && (
-                <button
-                  onClick={() => exportToCsv(selectedDirectory.id)}
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
-                >
-                  Export to CSV
-                </button>
-              )}
+            <div className="flex items-center gap-3 mb-6">
+              <span className="text-2xl">👥</span>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Business Contact Database</h2>
+                <p className="text-sm text-gray-600">View and export business contacts for your outreach campaigns</p>
+              </div>
             </div>
 
-            <div className="overflow-x-auto">
-              {/* Debug information */}
-              <div className="mb-4 p-2 bg-gray-100 rounded text-sm">
-                <strong>Debug Info:</strong> 
-                <br />Businesses array length: {businesses.length}
-                <br />Selected directory: {selectedDirectory?.name || 'None'}
-                <br />Selected directory ID: {selectedDirectory?.id || 'None'}
-                <br />Loading state: {loading ? 'True' : 'False'}
-                {businesses.length > 0 && (
+            {/* Contact Statistics */}
+            {businesses.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div className="bg-blue-50 p-4 rounded-lg text-center">
+                  <div className="text-2xl font-bold text-blue-600">{businesses.length}</div>
+                  <div className="text-sm text-blue-600">Total Contacts</div>
+                </div>
+                <div className="bg-green-50 p-4 rounded-lg text-center">
+                  <div className="text-2xl font-bold text-green-600">
+                    {businesses.filter(b => b.phone).length}
+                  </div>
+                  <div className="text-sm text-green-600">With Phone Numbers</div>
+                </div>
+                <div className="bg-purple-50 p-4 rounded-lg text-center">
+                  <div className="text-2xl font-bold text-purple-600">
+                    {businesses.filter(b => b.email).length}
+                  </div>
+                  <div className="text-sm text-purple-600">With Email Addresses</div>
+                </div>
+                <div className="bg-orange-50 p-4 rounded-lg text-center">
+                  <div className="text-2xl font-bold text-orange-600">
+                    {businesses.filter(b => b.website).length}
+                  </div>
+                  <div className="text-sm text-orange-600">With Websites</div>
+                </div>
+              </div>
+            )}
+
+            {/* Directory Selection and Export */}
+            <div className="flex items-center justify-between mb-6 p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center gap-3">
+                {selectedDirectory ? (
                   <>
-                    <br />Sample business: {businesses[0]?.business_name || 'No name'}
-                    <br />Sample phone: {businesses[0]?.phone || 'No phone'}
+                    <span className="text-green-600">✅</span>
+                    <div>
+                      <div className="font-medium text-gray-900">Viewing: {selectedDirectory.name}</div>
+                      <div className="text-sm text-gray-600">
+                        {businesses.length} business contacts • Click "View Businesses" from any directory in "Manage Directories" to change source
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-yellow-600">⚠️</span>
+                    <div>
+                      <div className="font-medium text-gray-900">No Directory Selected</div>
+                      <div className="text-sm text-gray-600">
+                        Go to "Manage Directories" and click "View Businesses" on any scraped directory
+                      </div>
+                    </div>
                   </>
                 )}
               </div>
-              
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Business Name
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Contact Person
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Phone
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Email
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Website
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Socials
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {businesses.length === 0 ? (
+              {selectedDirectory && businesses.length > 0 && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => exportBusinesses(selectedDirectory.id, selectedDirectory.name)}
+                    disabled={exportLoading}
+                    className="px-6 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-md hover:from-green-700 hover:to-green-800 disabled:bg-gray-400 transition-all duration-200 font-semibold shadow-md"
+                  >
+                    {exportLoading ? (
+                      <div className="flex items-center gap-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Exporting...
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        📥 Export {businesses.length} Contacts
+                      </div>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => exportBusinesses()}
+                    disabled={exportLoading}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                  >
+                    📊 Export All ({stats.totalBusinesses})
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Business Contacts Table */}
+            {businesses.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
                     <tr>
-                      <td colSpan="6" className="px-6 py-4 text-center text-gray-500">
-                        {loading ? 'Loading businesses...' : 'No businesses found. Click "View Businesses" on a scraped directory.'}
-                      </td>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <div className="flex items-center gap-1">
+                          🏢 Business Name
+                        </div>
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <div className="flex items-center gap-1">
+                          📞 Phone Number
+                        </div>
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <div className="flex items-center gap-1">
+                          📧 Email Address
+                        </div>
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <div className="flex items-center gap-1">
+                          🌐 Website
+                        </div>
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <div className="flex items-center gap-1">
+                          📍 Address
+                        </div>
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <div className="flex items-center gap-1">
+                          🎯 SDR Actions
+                        </div>
+                      </th>
                     </tr>
-                  ) : (
-                    businesses.map((business) => (
-                      <tr key={business.id} className="hover:bg-gray-50">
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {businesses.map((business, index) => (
+                      <tr key={business.id || index} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">{business.business_name}</div>
-                          {business.address && (
-                            <div className="text-sm text-gray-500">{business.address}</div>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {business.contact_person || '-'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {business.phone ? (
-                            <a href={`tel:${business.phone}`} className="text-blue-600 hover:text-blue-900">
-                              {business.phone}
-                            </a>
-                          ) : '-'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {business.email ? (
-                            <a href={`mailto:${business.email}`} className="text-blue-600 hover:text-blue-900">
-                              {business.email}
-                            </a>
-                          ) : '-'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {business.website ? (
-                            <a href={business.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-900">
-                              Visit
-                            </a>
-                          ) : '-'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {business.socials ? (
-                            <div className="max-w-xs truncate" title={business.socials}>
-                              {business.socials}
+                          <div className="flex items-center">
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">
+                                {business.business_name || 'N/A'}
+                              </div>
+                              {business.contact_person && (
+                                <div className="text-sm text-gray-500">
+                                  Contact: {business.contact_person}
+                                </div>
+                              )}
                             </div>
-                          ) : '-'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            {business.phone ? (
+                              <>
+                                <span className="text-green-600">📞</span>
+                                <a
+                                  href={`tel:${business.phone}`}
+                                  className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                                >
+                                  {business.phone}
+                                </a>
+                              </>
+                            ) : (
+                              <span className="text-gray-400 text-sm">No phone</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            {business.email ? (
+                              <>
+                                <span className="text-green-600">📧</span>
+                                <a
+                                  href={`mailto:${business.email}`}
+                                  className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                                >
+                                  {business.email}
+                                </a>
+                              </>
+                            ) : (
+                              <span className="text-gray-400 text-sm">No email</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            {business.website ? (
+                              <>
+                                <span className="text-green-600">🌐</span>
+                                <a
+                                  href={business.website}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-sm text-blue-600 hover:text-blue-800 font-medium truncate max-w-32"
+                                >
+                                  {business.website.replace(/^https?:\/\//, '').split('/')[0]}
+                                </a>
+                              </>
+                            ) : (
+                              <span className="text-gray-400 text-sm">No website</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm text-gray-900 max-w-48">
+                            {business.address || <span className="text-gray-400">No address</span>}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex gap-1">
+                            {business.phone && (
+                              <a
+                                href={`tel:${business.phone}`}
+                                className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs hover:bg-green-200 transition-colors"
+                                title="Call this business"
+                              >
+                                📞 Call
+                              </a>
+                            )}
+                            {business.email && (
+                              <a
+                                href={`mailto:${business.email}?subject=Partnership Opportunity with The Guild Of Honour`}
+                                className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-colors"
+                                title="Email this business"
+                              >
+                                📧 Email
+                              </a>
+                            )}
+                            {business.website && (
+                              <a
+                                href={business.website}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs hover:bg-purple-200 transition-colors"
+                                title="Visit business website"
+                              >
+                                🌐 Visit
+                              </a>
+                            )}
+                          </div>
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                {selectedDirectory ? (
+                  <>
+                    <div className="text-6xl mb-4">📭</div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Businesses Found</h3>
+                    <p className="text-gray-600 mb-4">
+                      The directory "{selectedDirectory.name}" hasn't been scraped yet or contains no business listings.
+                    </p>
+                    <button
+                      onClick={() => scrapeDirectory(selectedDirectory)}
+                      className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                    >
+                      🚀 Scrape This Directory
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-6xl mb-4">👥</div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">Select a Directory to View Businesses</h3>
+                    <p className="text-gray-600 mb-4">
+                      Go to "Manage Directories" and click "View Businesses" on any scraped directory to see business contacts here.
+                    </p>
+                    <button
+                      onClick={() => setActiveTab('directories')}
+                      className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                    >
+                      📁 Go to Manage Directories
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
+            {businesses.length > 0 && (
+              <div className="mt-6 p-4 bg-yellow-50 border-l-4 border-yellow-400">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-yellow-600">💡</span>
+                  <h4 className="font-medium text-yellow-800">SDR Pro Tips</h4>
+                </div>
+                <div className="text-sm text-yellow-700 space-y-1">
+                  <p>• <strong>Quick Actions:</strong> Use the "Call", "Email", and "Visit" buttons in each row for immediate outreach</p>
+                  <p>• <strong>Email Template:</strong> The email links include "Guild Of Honour" in the subject line automatically</p>
+                  <p>• <strong>CSV Export:</strong> Perfect for importing into your CRM (HubSpot, Salesforce, etc.)</p>
+                  <p>• <strong>Data Quality:</strong> All contacts have been verified and filtered for accuracy</p>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
