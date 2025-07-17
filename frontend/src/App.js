@@ -110,16 +110,12 @@ const App = () => {
   };
 
   const viewBusinesses = async (directory) => {
-    // Alert to test if function is being called
-    alert(`viewBusinesses called with directory: ${directory?.name || 'No name'}`);
-    
     console.log('=== viewBusinesses called ===');
     console.log('Directory:', directory);
     console.log('Directory ID:', directory?.id);
     
     if (!directory || !directory.id) {
       console.error('No directory or directory ID provided');
-      alert('Error: No directory selected');
       return;
     }
     
@@ -139,7 +135,6 @@ const App = () => {
       const response = await axios.get(url);
       console.log('API response status:', response.status);
       console.log('API response data length:', response.data.length);
-      console.log('Sample business:', response.data[0] || 'No businesses');
       
       // Update businesses state
       setBusinesses(response.data);
@@ -147,8 +142,6 @@ const App = () => {
       
     } catch (error) {
       console.error('Error in viewBusinesses:', error);
-      console.error('Error response:', error.response?.data);
-      alert(`Error loading businesses: ${error.message}`);
     } finally {
       setLoading(false);
       console.log('viewBusinesses completed');
