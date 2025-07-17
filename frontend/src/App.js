@@ -13,21 +13,53 @@ const App = () => {
   const [loading, setLoading] = useState(false);
   const [selectedDirectory, setSelectedDirectory] = useState(null);
   const [searchResults, setSearchResults] = useState([]);
+  const [exportLoading, setExportLoading] = useState(false);
 
   const [progressLogs, setProgressLogs] = useState([]);
   const [showLogs, setShowLogs] = useState(false);
 
+  // Stats for SDR dashboard
+  const [stats, setStats] = useState({
+    totalDirectories: 0,
+    scrapedDirectories: 0,
+    totalBusinesses: 0,
+    businessesWithPhone: 0,
+    businessesWithEmail: 0
+  });
+
   // Fetch directories on component mount
   useEffect(() => {
     fetchDirectories();
+    calculateStats();
   }, []);
 
   const fetchDirectories = async () => {
     try {
       const response = await axios.get(`${API}/directories`);
       setDirectories(response.data);
+      calculateStats();
     } catch (error) {
       console.error('Error fetching directories:', error);
+    }
+  };
+
+  const calculateStats = async () => {
+    try {
+      const dirResponse = await axios.get(`${API}/directories`);
+      const directories = dirResponse.data;
+      
+      const bizResponse = await axios.get(`${API}/businesses`);
+      const businesses = bizResponse.data;
+
+      setStats({
+        totalDirectories: directories.length,
+        scrapedDirectories: directories.filter(d => d.scrape_status === 'scraped').length,
+        totalBusinesses: businesses.length,
+        businessesWithPhone: businesses.filter(b => b.phone).length,
+        businessesWithEmail: businesses.filter(b => b.email).length
+      });
+    } catch (error) {
+      console.error('Error calculating stats:', error);
     }
   };
 
