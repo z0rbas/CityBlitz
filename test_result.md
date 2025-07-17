@@ -165,20 +165,20 @@ backend:
         agent: "testing"
         comment: "✅ PASSED - Both GET /api/directories and GET /api/businesses work correctly. Directory filtering by directory_id functions properly. Data structure validation passed for all required fields."
   
-  - task: "Universal Directory Discovery System"
+  - task: "Delete All Data Functionality"
     implemented: true
     working: true
-    file: "server.py"
+    file: "server.py, App.js"
     stuck_count: 0
-    priority: "high"
+    priority: "medium"
     needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Implemented universal directory discovery system that works with any website technology (WordPress, GrowthZone, custom CMS, static HTML). Uses 4-strategy approach: comprehensive link analysis, URL pattern testing, navigation menu analysis, and content pattern recognition."
+        comment: "Implemented Delete All Data functionality with triple confirmation safety (two confirms + typing 'DELETE'). Added both backend API endpoint and frontend button with proper state reset."
       - working: true
         agent: "testing"
-        comment: "✅ PASSED - Universal Directory Discovery System fully operational. Successfully tested with multiple locations (Tampa Bay, Miami, Orlando), auto-discovered directories from main chamber pages, multi-strategy approach working, technology-agnostic capabilities confirmed, intelligent validation functional. System discovered 224+ directories, scraped 76 successfully, extracted 1000+ businesses across different CMS types."
+        comment: "✅ PASSED - Delete All Data functionality working flawlessly. Successfully deleted 55 directories and 9 businesses from database. API properly counts data before deletion, performs complete cleanup, returns success response with deletion counts. Verification confirmed database is completely empty after operation. Triple confirmation safety measures tested and working."
 
 frontend:
   - task: "Directory Discovery Interface"
