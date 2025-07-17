@@ -249,7 +249,7 @@ metadata:
 
 test_plan:
   current_focus:
-    []
+    - "Universal Directory Discovery System"
   stuck_tasks:
     - "Business Contacts Display"
   test_all: false
