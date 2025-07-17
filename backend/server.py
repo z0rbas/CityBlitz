@@ -1032,22 +1032,76 @@ class DirectoryDiscoverer:
             if len(text) < 10:
                 return None
             
-            # Find business name (usually in heading or first strong/prominent element)
-            name_element = container.find(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'b', '.name', '.title'])
-            if name_element:
-                name = name_element.get_text().strip()
-                if self._is_valid_business_name(name):
-                    business['business_name'] = name
+            # Enhanced business name extraction for GrowthZone CMS
+            name_element = None
             
-            # If no name found, try first line
-            if not business.get('business_name'):
+            # Strategy 1: Look for heading elements
+            name_element = container.find(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+            
+            # Strategy 2: Look for elements with specific classes
+            if not name_element:
+                name_element = container.find(['div', 'span', 'a'], class_=re.compile(r'name|title|business|company', re.I))
+            
+            # Strategy 3: Look for strong/bold elements
+            if not name_element:
+                name_element = container.find(['strong', 'b'])
+            
+            # Strategy 4: Look for the first link in the container (often the business name)
+            if not name_element:
+                name_element = container.find('a', href=True)
+            
+            # Strategy 5: Try to extract from structured data or specific patterns
+            if not name_element:
+                # Look for patterns like "Business Name | Category" or "Business Name - Description"
                 lines = [line.strip() for line in text.split('\n') if line.strip()]
                 if lines:
                     first_line = lines[0]
-                    if self._is_valid_business_name(first_line):
-                        business['business_name'] = first_line
+                    # Remove common prefixes/suffixes
+                    if '|' in first_line:
+                        potential_name = first_line.split('|')[0].strip()
+                    elif ' - ' in first_line:
+                        potential_name = first_line.split(' - ')[0].strip()
+                    elif len(first_line) < 100:  # Reasonable length for business name
+                        potential_name = first_line
+                    else:
+                        potential_name = None
+                    
+                    if potential_name and self._is_valid_business_name(potential_name):
+                        business['business_name'] = potential_name
             
-            # Extract contact information
+            # Extract name from element if found
+            if name_element and not business.get('business_name'):
+                name = name_element.get_text().strip()
+                # Clean up the name
+                if '|' in name:
+                    name = name.split('|')[0].strip()
+                elif ' - ' in name:
+                    name = name.split(' - ')[0].strip()
+                
+                if self._is_valid_business_name(name):
+                    business['business_name'] = name
+            
+            # If still no name, try more aggressive extraction
+            if not business.get('business_name'):
+                # Look for any text that might be a business name
+                for line in text.split('\n')[:10]:  # Check first 10 lines
+                    line = line.strip()
+                    if len(line) > 3 and len(line) < 100:
+                        # Skip lines that are obviously not business names
+                        skip_patterns = [
+                            'phone', 'email', 'website', 'address', 'contact',
+                            'description', 'category', 'type', 'location',
+                            'hours', 'open', 'closed', 'monday', 'tuesday',
+                            'wednesday', 'thursday', 'friday', 'saturday', 'sunday'
+                        ]
+                        
+                        line_lower = line.lower()
+                        if not any(pattern in line_lower for pattern in skip_patterns):
+                            if self._is_valid_business_name(line):
+                                business['business_name'] = line
+                                break
+            
+            # Extract contact information (existing logic)
             phone_match = re.search(r'(\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})', text)
             if phone_match:
                 business['phone'] = self._clean_phone_number(phone_match.group(1))
