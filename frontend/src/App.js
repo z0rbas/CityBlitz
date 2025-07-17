@@ -120,34 +120,35 @@ const App = () => {
       return;
     }
     
-    setSelectedDirectory(directory);
+    // Set states synchronously first
     setActiveTab('businesses');
-    
-    // Clear existing businesses first
-    setBusinesses([]);
-    
-    // Add explicit loading state
+    setSelectedDirectory(directory);
     setLoading(true);
+    setBusinesses([]); // Clear existing businesses
     
     try {
-      console.log('About to call fetchBusinesses with ID:', directory.id);
+      console.log('About to call API with ID:', directory.id);
       
-      // Make API call directly here to debug
+      // Make API call directly
       const url = `${API}/businesses?directory_id=${directory.id}`;
-      console.log('Making direct API call to:', url);
+      console.log('Making API call to:', url);
       
       const response = await axios.get(url);
-      console.log('Direct API response:', response.data);
-      console.log('Number of businesses:', response.data.length);
+      console.log('API response status:', response.status);
+      console.log('API response data length:', response.data.length);
+      console.log('Sample business:', response.data[0] || 'No businesses');
       
+      // Update businesses state
       setBusinesses(response.data);
-      console.log('Businesses state updated');
+      console.log('Businesses state updated with', response.data.length, 'businesses');
       
     } catch (error) {
       console.error('Error in viewBusinesses:', error);
+      console.error('Error response:', error.response?.data);
       alert(`Error loading businesses: ${error.message}`);
     } finally {
       setLoading(false);
+      console.log('viewBusinesses completed');
     }
   };
 
