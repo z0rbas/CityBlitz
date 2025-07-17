@@ -34,6 +34,7 @@ class BackendTester:
         self.session = None
         self.test_results = {
             'directory_discovery': {'passed': False, 'error': None, 'data': None},
+            'universal_discovery': {'passed': False, 'error': None, 'data': None},
             'directory_management': {'passed': False, 'error': None, 'data': None},
             'directory_scraping': {'passed': False, 'error': None, 'data': None},
             'enhanced_scraper': {'passed': False, 'error': None, 'data': None},
