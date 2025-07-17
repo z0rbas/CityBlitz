@@ -699,6 +699,188 @@ class BackendTester:
             self.test_results['csv_export']['error'] = str(e)
             print(f"Error testing CSV export: {e}")
     
+    async def test_export_businesses_api(self):
+        """Test GET /api/export-businesses"""
+        print("\n=== Testing Export Businesses API ===")
+        
+        try:
+            session = await self.create_session()
+            
+            # First, get current database state
+            async with session.get(f"{API_BASE}/directories") as dir_response:
+                if dir_response.status == 200:
+                    directories = await dir_response.json()
+                    print(f"Current directories in database: {len(directories)}")
+                else:
+                    print("Could not fetch directories count")
+            
+            async with session.get(f"{API_BASE}/businesses") as biz_response:
+                if biz_response.status == 200:
+                    businesses = await biz_response.json()
+                    print(f"Current businesses in database: {len(businesses)}")
+                else:
+                    print("Could not fetch businesses count")
+            
+            # Test 1: Export all businesses
+            print("\n📊 Testing export all businesses...")
+            async with session.get(f"{API_BASE}/export-businesses") as response:
+                print(f"Response status: {response.status}")
+                
+                if response.status == 200:
+                    # Check if response is CSV content
+                    content_type = response.headers.get('content-type', '')
+                    if 'text/csv' in content_type:
+                        csv_content = await response.text()
+                        lines = csv_content.split('\n')
+                        print(f"✅ CSV export successful: {len(lines)} lines")
+                        
+                        # Verify CSV header
+                        if lines and lines[0]:
+                            header = lines[0]
+                            expected_fields = ['business_name', 'contact_person', 'phone', 'email', 'website', 'address', 'socials', 'directory_name']
+                            header_valid = all(field in header for field in expected_fields)
+                            
+                            if header_valid:
+                                print("✅ CSV header validation passed")
+                                
+                                # Show sample data
+                                print("📋 Sample CSV data:")
+                                for i, line in enumerate(lines[:4]):  # Header + 3 data lines
+                                    if line.strip():
+                                        print(f"  {i}: {line[:100]}...")
+                                
+                                self.test_results['export_businesses']['passed'] = True
+                                self.test_results['export_businesses']['data'] = {
+                                    'total_lines': len(lines),
+                                    'header_valid': True,
+                                    'content_type': content_type
+                                }
+                            else:
+                                self.test_results['export_businesses']['error'] = f"Invalid CSV header: {header}"
+                        else:
+                            self.test_results['export_businesses']['error'] = "Empty CSV content"
+                    else:
+                        self.test_results['export_businesses']['error'] = f"Unexpected content type: {content_type}"
+                elif response.status == 404:
+                    # No businesses found - this is valid if database is empty
+                    print("📭 No businesses found for export (database might be empty)")
+                    self.test_results['export_businesses']['passed'] = True
+                    self.test_results['export_businesses']['data'] = {'no_businesses': True}
+                else:
+                    error_text = await response.text()
+                    self.test_results['export_businesses']['error'] = f"HTTP {response.status}: {error_text}"
+            
+            # Test 2: Export businesses for specific directory (if businesses exist)
+            if businesses:
+                directory_id = businesses[0].get('directory_id')
+                if directory_id:
+                    print(f"\n📊 Testing export for specific directory: {directory_id}")
+                    async with session.get(f"{API_BASE}/export-businesses?directory_id={directory_id}") as response:
+                        if response.status == 200:
+                            csv_content = await response.text()
+                            lines = csv_content.split('\n')
+                            print(f"✅ Directory-specific export successful: {len(lines)} lines")
+                        else:
+                            print(f"⚠️ Directory-specific export failed: HTTP {response.status}")
+                    
+        except Exception as e:
+            self.test_results['export_businesses']['error'] = str(e)
+            print(f"Error testing export businesses API: {e}")
+    
+    async def test_delete_all_data_api(self):
+        """Test DELETE /api/delete-all-data"""
+        print("\n=== Testing Delete All Data API ===")
+        
+        try:
+            session = await self.create_session()
+            
+            # First, get current database state
+            print("📊 Getting current database state...")
+            
+            async with session.get(f"{API_BASE}/directories") as dir_response:
+                if dir_response.status == 200:
+                    directories_before = await dir_response.json()
+                    directories_count_before = len(directories_before)
+                    print(f"Directories before deletion: {directories_count_before}")
+                else:
+                    directories_count_before = 0
+                    print("Could not fetch directories count")
+            
+            async with session.get(f"{API_BASE}/businesses") as biz_response:
+                if biz_response.status == 200:
+                    businesses_before = await biz_response.json()
+                    businesses_count_before = len(businesses_before)
+                    print(f"Businesses before deletion: {businesses_count_before}")
+                else:
+                    businesses_count_before = 0
+                    print("Could not fetch businesses count")
+            
+            # Test the delete all data endpoint
+            print("\n🗑️ Testing DELETE /api/delete-all-data...")
+            async with session.delete(f"{API_BASE}/delete-all-data") as response:
+                print(f"Response status: {response.status}")
+                
+                if response.status == 200:
+                    result = await response.json()
+                    print(f"Delete operation successful: {result.get('success', False)}")
+                    print(f"Message: {result.get('message', 'N/A')}")
+                    
+                    directories_deleted = result.get('directories_deleted', 0)
+                    businesses_deleted = result.get('businesses_deleted', 0)
+                    
+                    print(f"Directories deleted: {directories_deleted}")
+                    print(f"Businesses deleted: {businesses_deleted}")
+                    
+                    if result.get('success'):
+                        # Verify data was actually deleted
+                        print("\n🔍 Verifying data deletion...")
+                        
+                        async with session.get(f"{API_BASE}/directories") as verify_dir_response:
+                            if verify_dir_response.status == 200:
+                                directories_after = await verify_dir_response.json()
+                                directories_count_after = len(directories_after)
+                                print(f"Directories after deletion: {directories_count_after}")
+                            else:
+                                directories_count_after = -1
+                        
+                        async with session.get(f"{API_BASE}/businesses") as verify_biz_response:
+                            if verify_biz_response.status == 200:
+                                businesses_after = await verify_biz_response.json()
+                                businesses_count_after = len(businesses_after)
+                                print(f"Businesses after deletion: {businesses_count_after}")
+                            else:
+                                businesses_count_after = -1
+                        
+                        # Validate deletion was complete
+                        deletion_successful = (
+                            directories_count_after == 0 and 
+                            businesses_count_after == 0
+                        )
+                        
+                        if deletion_successful:
+                            print("✅ Data deletion verification passed - database is empty")
+                            self.test_results['delete_all_data']['passed'] = True
+                            self.test_results['delete_all_data']['data'] = {
+                                'directories_before': directories_count_before,
+                                'businesses_before': businesses_count_before,
+                                'directories_deleted': directories_deleted,
+                                'businesses_deleted': businesses_deleted,
+                                'directories_after': directories_count_after,
+                                'businesses_after': businesses_count_after,
+                                'deletion_complete': True
+                            }
+                        else:
+                            self.test_results['delete_all_data']['error'] = f"Data not completely deleted. Directories after: {directories_count_after}, Businesses after: {businesses_count_after}"
+                    else:
+                        self.test_results['delete_all_data']['error'] = "Delete operation reported as unsuccessful"
+                else:
+                    error_text = await response.text()
+                    self.test_results['delete_all_data']['error'] = f"HTTP {response.status}: {error_text}"
+                    
+        except Exception as e:
+            self.test_results['delete_all_data']['error'] = str(e)
+            print(f"Error testing delete all data API: {e}")
+
     async def run_all_tests(self):
         """Run all backend tests"""
         print(f"Starting backend API tests...")
