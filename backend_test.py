@@ -897,6 +897,10 @@ class BackendTester:
             await self.test_business_data_api()
             await self.test_csv_export_api()
             
+            # Test new Delete All Data functionality
+            await self.test_export_businesses_api()  # Test export before deletion
+            await self.test_delete_all_data_api()     # Test deletion functionality
+            
         finally:
             await self.close_session()
         
