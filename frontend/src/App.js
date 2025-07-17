@@ -351,51 +351,130 @@ const App = () => {
         {activeTab === 'discover' && (
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="mb-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Discover New Directories</h2>
+              <div className="flex items-center gap-3 mb-4">
+                <span className="text-2xl">🎯</span>
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">Discover New Lead Sources</h2>
+                  <p className="text-sm text-gray-600">Find chambers of commerce and business directories in any city to generate leads</p>
+                </div>
+              </div>
+              
+              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <span className="text-yellow-400 text-lg">⚡</span>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-yellow-700">
+                      <strong>Pro Tip:</strong> The AI scraper automatically finds business directories from any chamber's main website. 
+                      It works with all website types - WordPress, custom CMS, JavaScript-heavy sites, and more!
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div className="flex gap-4 items-end">
                 <div className="flex-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    🌍 Target City or Region
+                  </label>
                   <input
                     type="text"
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter location (e.g., Tampa Bay, Miami, Orlando)"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
+                    placeholder="Enter any city (e.g., Tampa Bay, Miami, Chicago, Dallas)"
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    💡 Works with any US city - the AI will find all relevant chambers and business directories
+                  </p>
                 </div>
                 <button
                   onClick={discoverDirectories}
                   disabled={loading}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                  className="px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-md hover:from-blue-700 hover:to-blue-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all duration-200 font-semibold shadow-lg"
                 >
-                  {loading ? 'Discovering...' : 'Discover Directories'}
+                  {loading ? (
+                    <div className="flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Discovering...
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      🔍 Find New Leads
+                    </div>
+                  )}
                 </button>
               </div>
             </div>
 
             {searchResults.length > 0 && (
               <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Discovery Results</h3>
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-lg">🎉</span>
+                  <h3 className="text-lg font-medium text-gray-900">Discovery Results - Ready to Scrape!</h3>
+                </div>
                 <div className="grid gap-4">
                   {searchResults.map((directory) => (
-                    <div key={directory.id} className="border border-gray-200 rounded-lg p-4">
+                    <div key={directory.id} className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors">
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
-                          <h4 className="font-medium text-gray-900">{directory.name}</h4>
-                          <p className="text-sm text-gray-500">{directory.url}</p>
-                          <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full mt-2">
-                            {directory.directory_type}
-                          </span>
+                          <div className="flex items-center gap-2 mb-2">
+                            <h4 className="font-medium text-gray-900">{directory.name}</h4>
+                            <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                              {directory.directory_type}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-500 mb-2">{directory.url}</p>
+                          <p className="text-xs text-green-600">
+                            ✅ Ready to scrape - AI will automatically find their business directory page
+                          </p>
                         </div>
                         <button
-                          onClick={() => scrapeDirectory(directory.id)}
-                          className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                          onClick={() => scrapeDirectory(directory)}
+                          disabled={loading}
+                          className="px-6 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-md hover:from-green-700 hover:to-green-800 disabled:bg-gray-400 transition-all duration-200 font-semibold shadow-md"
                         >
-                          Scrape Now
+                          <div className="flex items-center gap-2">
+                            🚀 Scrape Businesses
+                          </div>
                         </button>
                       </div>
                     </div>
                   ))}
+                </div>
+                <div className="mt-4 p-4 bg-green-50 rounded-lg">
+                  <p className="text-sm text-green-700">
+                    <strong>Next Step:</strong> Click "Scrape Businesses" on any directory above to extract business contacts. 
+                    The AI will automatically find their business directory page and extract phone numbers, emails, and websites!
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {searchResults.length === 0 && !loading && (
+              <div className="text-center py-12">
+                <div className="text-6xl mb-4">🎯</div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Ready to Find New Leads?</h3>
+                <p className="text-gray-600 mb-4">
+                  Enter a city name above and click "Find New Leads" to discover chambers of commerce and business directories.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl mx-auto text-sm">
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <div className="text-blue-600 text-2xl mb-2">🌍</div>
+                    <div className="font-medium text-blue-800">Universal Discovery</div>
+                    <div className="text-blue-600">Works with any website technology</div>
+                  </div>
+                  <div className="bg-green-50 p-4 rounded-lg">
+                    <div className="text-green-600 text-2xl mb-2">⚡</div>
+                    <div className="font-medium text-green-800">AI-Powered</div>
+                    <div className="text-green-600">Automatically finds business directories</div>
+                  </div>
+                  <div className="bg-purple-50 p-4 rounded-lg">
+                    <div className="text-purple-600 text-2xl mb-2">📊</div>
+                    <div className="font-medium text-purple-800">High Quality Data</div>
+                    <div className="text-purple-600">Clean, verified business contacts</div>
+                  </div>
                 </div>
               </div>
             )}
