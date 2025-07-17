@@ -273,7 +273,8 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Universal Directory Discovery System"
+    - "Export Businesses API"
+    - "Delete All Data API"
   stuck_tasks:
     - "Business Contacts Display"
   test_all: false
