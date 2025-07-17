@@ -859,42 +859,28 @@ class DirectoryDiscoverer:
             
             # Get page content
             content = await page.content()
-            
-            # Parse with BeautifulSoup for structured extraction
             soup = BeautifulSoup(content, 'html.parser')
             
-            # Strategy 1: Look for GrowthZone-specific business containers
-            business_containers = soup.find_all(['div', 'article', 'section'], 
-                                              class_=re.compile(r'business|member|company|listing|card|item|entry|gz-'))
+            # Check if this looks like a business directory listing page with profile links
+            profile_links = []
+            for link in soup.find_all('a', href=True):
+                href = link.get('href')
+                if href and ('/list/detail/' in href or '/list/member/' in href or '/list/ql/' in href or '/profile/' in href or '/business/' in href):
+                    if href.startswith('/'):
+                        href = urljoin(page_url, href)
+                    profile_links.append(href)
             
-            # Strategy 2: Look for any div with contact information
-            contact_divs = soup.find_all('div', string=re.compile(r'\d{3}[-.\s]?\d{3}[-.\s]?\d{4}'))
-            business_containers.extend(contact_divs)
+            profile_links = list(set(profile_links))
+            logging.info(f"🔗 Found {len(profile_links)} business profile links")
             
-            # Strategy 3: Look for parent elements of phone/email links
-            phone_links = soup.find_all('a', href=re.compile(r'tel:'))
-            email_links = soup.find_all('a', href=re.compile(r'mailto:'))
-            
-            for link in phone_links + email_links:
-                parent = link.parent
-                if parent:
-                    business_containers.append(parent)
-            
-            logging.info(f"📊 Found {len(business_containers)} potential business containers")
-            
-            # Extract businesses from containers
-            for container in business_containers:
-                business = self._extract_business_from_container_playwright(container, page_url)
-                if business and self._is_valid_business_record(business):
-                    businesses.append(business)
-            
-            # Strategy 4: Look for table-based listings
-            tables = soup.find_all('table')
-            for table in tables:
-                table_businesses = self._extract_businesses_from_table_playwright(table, page_url)
-                for business in table_businesses:
-                    if self._is_valid_business_record(business):
-                        businesses.append(business)
+            # If we have profile links, extract businesses from individual profiles
+            if len(profile_links) > 0:
+                logging.info("🧪 Using profile-based extraction method")
+                businesses = await self._extract_from_business_profiles(page, profile_links[:25])  # Limit to 25 for performance
+            else:
+                logging.info("📄 Using page-based extraction method")
+                # Fall back to page-based extraction
+                businesses = await self._extract_from_current_page(page, page_url, soup)
             
             # Remove duplicates
             businesses = self._remove_duplicate_businesses(businesses)
@@ -903,6 +889,179 @@ class DirectoryDiscoverer:
             
         except Exception as e:
             logging.error(f"❌ Error in Playwright business scraping: {str(e)}")
+        
+        return businesses
+    
+    async def _extract_from_business_profiles(self, page, profile_links: List[str]) -> List[Dict]:
+        """Extract businesses from individual profile pages"""
+        businesses = []
+        
+        for i, business_url in enumerate(profile_links):
+            try:
+                logging.info(f"📋 Processing profile {i+1}/{len(profile_links)}: {business_url}")
+                
+                # Navigate to business profile
+                await page.goto(business_url, wait_until='networkidle', timeout=30000)
+                await page.wait_for_timeout(1500)  # Wait for dynamic content
+                
+                # Get profile content
+                profile_content = await page.content()
+                profile_soup = BeautifulSoup(profile_content, 'html.parser')
+                
+                # Extract business information
+                business = {}
+                page_text = profile_soup.get_text()
+                
+                # Enhanced business name extraction for GrowthZone
+                business_name = None
+                
+                # Strategy 1: From page title
+                title_tag = profile_soup.find('title')
+                if title_tag:
+                    title = title_tag.get_text().strip()
+                    if ' - ' in title and 'South Tampa Chamber' in title:
+                        business_name = title.split(' - ')[0].strip()
+                    elif '|' in title:
+                        business_name = title.split('|')[0].strip()
+                    elif title and len(title) < 100 and 'South Tampa Chamber' not in title:
+                        business_name = title.strip()
+                
+                # Strategy 2: From h1/h2 elements
+                if not business_name:
+                    for heading in profile_soup.find_all(['h1', 'h2', 'h3']):
+                        heading_text = heading.get_text().strip()
+                        if heading_text and len(heading_text) < 100 and self._is_valid_business_name(heading_text):
+                            business_name = heading_text
+                            break
+                
+                # Strategy 3: From structured data or specific containers
+                if not business_name:
+                    # Look for business name in common GrowthZone patterns
+                    name_containers = profile_soup.find_all(['div', 'span'], class_=re.compile(r'name|title|business|company', re.I))
+                    for container in name_containers:
+                        container_text = container.get_text().strip()
+                        if container_text and len(container_text) < 100 and self._is_valid_business_name(container_text):
+                            business_name = container_text
+                            break
+                
+                # Strategy 4: Extract from URL if possible
+                if not business_name:
+                    # Some URLs contain business names
+                    url_parts = business_url.split('/')
+                    for part in url_parts:
+                        if part and '-' in part and len(part) > 5:
+                            # Convert URL slug to business name
+                            potential_name = part.replace('-', ' ').title()
+                            if self._is_valid_business_name(potential_name):
+                                business_name = potential_name
+                                break
+                
+                if business_name:
+                    business['business_name'] = business_name
+                    logging.info(f"✅ Extracted business name: {business_name}")
+                else:
+                    logging.info(f"❌ Could not extract business name from profile")
+                    continue  # Skip if no business name
+                
+                # Extract phone number
+                phone_patterns = [
+                    r'\((\d{3})\)\s*(\d{3})-(\d{4})',
+                    r'(\d{3})-(\d{3})-(\d{4})',
+                    r'(\d{3})\.(\d{3})\.(\d{4})',
+                    r'(\d{3})\s+(\d{3})\s+(\d{4})'
+                ]
+                
+                for pattern in phone_patterns:
+                    phone_match = re.search(pattern, page_text)
+                    if phone_match:
+                        # Format phone number consistently
+                        if len(phone_match.groups()) == 3:
+                            phone = f"({phone_match.group(1)}) {phone_match.group(2)}-{phone_match.group(3)}"
+                        else:
+                            phone = phone_match.group(0)
+                        business['phone'] = phone
+                        logging.info(f"📞 Extracted phone: {phone}")
+                        break
+                
+                # Extract email address
+                email_match = re.search(r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', page_text)
+                if email_match:
+                    business['email'] = email_match.group(1)
+                    logging.info(f"📧 Extracted email: {business['email']}")
+                
+                # Extract website
+                website_links = profile_soup.find_all('a', href=re.compile(r'http'))
+                for link in website_links:
+                    href = link.get('href')
+                    # Skip social media and chamber links
+                    skip_domains = ['facebook', 'twitter', 'instagram', 'linkedin', 'southtampachamber', 'youtube']
+                    if href and not any(domain in href.lower() for domain in skip_domains):
+                        business['website'] = href
+                        logging.info(f"🌐 Extracted website: {href}")
+                        break
+                
+                # Extract address
+                address_patterns = [
+                    r'(\d+\s+[A-Za-z\s]+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|Court|Ct|Circle|Cir|Place|Pl)[A-Za-z\s,]*\d{5})',
+                    r'(\d+\s+[A-Za-z\s]+,\s*[A-Za-z\s]+,\s*[A-Z]{2}\s*\d{5})'
+                ]
+                
+                for pattern in address_patterns:
+                    address_match = re.search(pattern, page_text)
+                    if address_match:
+                        business['address'] = address_match.group(1).strip()
+                        logging.info(f"📍 Extracted address: {business['address']}")
+                        break
+                
+                # Only add if we have a name and at least one contact method
+                if business.get('business_name') and (business.get('phone') or business.get('email') or business.get('website')):
+                    businesses.append(business)
+                    logging.info(f"✅ Successfully extracted business")
+                else:
+                    logging.info(f"❌ Business rejected - insufficient data")
+                    
+            except Exception as e:
+                logging.error(f"❌ Error processing profile {business_url}: {str(e)}")
+                continue
+        
+        return businesses
+    
+    async def _extract_from_current_page(self, page, page_url: str, soup) -> List[Dict]:
+        """Extract businesses from current page content (fallback method)"""
+        businesses = []
+        
+        # Strategy 1: Look for GrowthZone-specific business containers
+        business_containers = soup.find_all(['div', 'article', 'section'], 
+                                          class_=re.compile(r'business|member|company|listing|card|item|entry|gz-'))
+        
+        # Strategy 2: Look for any div with contact information
+        contact_divs = soup.find_all('div', string=re.compile(r'\d{3}[-.\s]?\d{3}[-.\s]?\d{4}'))
+        business_containers.extend(contact_divs)
+        
+        # Strategy 3: Look for parent elements of phone/email links
+        phone_links = soup.find_all('a', href=re.compile(r'tel:'))
+        email_links = soup.find_all('a', href=re.compile(r'mailto:'))
+        
+        for link in phone_links + email_links:
+            parent = link.parent
+            if parent:
+                business_containers.append(parent)
+        
+        logging.info(f"📊 Found {len(business_containers)} potential business containers")
+        
+        # Extract businesses from containers
+        for container in business_containers:
+            business = self._extract_business_from_container_playwright(container, page_url)
+            if business and self._is_valid_business_record(business):
+                businesses.append(business)
+        
+        # Strategy 4: Look for table-based listings
+        tables = soup.find_all('table')
+        for table in tables:
+            table_businesses = self._extract_businesses_from_table_playwright(table, page_url)
+            for business in table_businesses:
+                if self._is_valid_business_record(business):
+                    businesses.append(business)
         
         return businesses
     
