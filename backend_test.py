@@ -720,6 +720,7 @@ class BackendTester:
         try:
             # Test in logical order
             await self.test_directory_discovery_api()
+            await self.test_universal_directory_discovery()  # New universal discovery test
             await self.test_directory_management_api()
             await self.test_directory_scraping_api()
             await self.test_enhanced_javascript_scraper()  # New enhanced scraper test
