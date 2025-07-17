@@ -110,6 +110,9 @@ const App = () => {
   };
 
   const viewBusinesses = async (directory) => {
+    // Alert to test if function is being called
+    alert(`viewBusinesses called with directory: ${directory?.name || 'No name'}`);
+    
     console.log('=== viewBusinesses called ===');
     console.log('Directory:', directory);
     console.log('Directory ID:', directory?.id);
