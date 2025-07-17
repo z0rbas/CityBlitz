@@ -319,8 +319,9 @@ const App = () => {
                       {directory.scrape_status === 'scraped' && (
                         <>
                           <button
-                            onClick={() => {
-                              alert('Button clicked!');
+                            onClick={(e) => {
+                              e.preventDefault();
+                              console.log('Button clicked, directory:', directory);
                               viewBusinesses(directory);
                             }}
                             className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm"
