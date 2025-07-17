@@ -307,17 +307,33 @@ const App = () => {
               <h1 className="text-3xl font-bold">🏢 Business Directory Scraper</h1>
               <p className="text-blue-100 mt-1">Generate high-quality leads for The Guild Of Honour SDR team</p>
             </div>
-            <div className="bg-white/10 rounded-lg p-4">
-              <div className="grid grid-cols-2 gap-4 text-center">
-                <div>
-                  <div className="text-2xl font-bold">{stats.totalBusinesses.toLocaleString()}</div>
-                  <div className="text-xs text-blue-100">Total Businesses</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-bold">{stats.scrapedDirectories}</div>
-                  <div className="text-xs text-blue-100">Ready Directories</div>
+            <div className="flex items-center gap-4">
+              <div className="bg-white/10 rounded-lg p-4">
+                <div className="grid grid-cols-2 gap-4 text-center">
+                  <div>
+                    <div className="text-2xl font-bold">{stats.totalBusinesses.toLocaleString()}</div>
+                    <div className="text-xs text-blue-100">Total Businesses</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold">{stats.scrapedDirectories}</div>
+                    <div className="text-xs text-blue-100">Ready Directories</div>
+                  </div>
                 </div>
               </div>
+              
+              {/* Delete All Data Button */}
+              {(stats.totalDirectories > 0 || stats.totalBusinesses > 0) && (
+                <button
+                  onClick={deleteAllData}
+                  disabled={loading}
+                  className="px-4 py-2 bg-red-600/20 border border-red-400/30 text-red-100 rounded-md hover:bg-red-600/30 disabled:bg-gray-600/20 disabled:text-gray-400 transition-all duration-200 text-sm font-medium"
+                  title="Delete all directories and business data"
+                >
+                  <div className="flex items-center gap-2">
+                    🗑️ Clear All Data
+                  </div>
+                </button>
+              )}
             </div>
           </div>
         </div>
