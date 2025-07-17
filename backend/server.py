@@ -501,77 +501,349 @@ class DirectoryDiscoverer:
         return businesses
     
     async def _find_directory_links_playwright(self, page, base_url: str) -> List[str]:
-        """Find business directory links using Playwright"""
+        """Universal directory finder that works with any website technology"""
         directory_links = []
         
         try:
             # Wait for page to be fully loaded
             await page.wait_for_load_state('networkidle')
             
-            # Look for directory-related links with specific patterns
-            directory_patterns = [
-                'member directory', 'business directory', 'member listing', 'business listing',
-                'find members', 'find businesses', 'member search', 'business search',
-                'directory', 'members', 'businesses', 'roster', 'listings'
-            ]
+            logging.info("🌍 Starting universal directory discovery...")
             
-            # Get all links
-            links = await page.locator('a').all()
+            # Strategy 1: Comprehensive Link Analysis
+            logging.info("🔍 Strategy 1: Comprehensive Link Analysis")
+            link_directories = await self._strategy_comprehensive_links(page, base_url)
+            directory_links.extend(link_directories)
             
-            for link in links:
-                try:
-                    href = await link.get_attribute('href')
-                    text = await link.inner_text()
-                    
-                    if not href or href.startswith(('mailto:', 'tel:', 'javascript:', '#')):
-                        continue
-                    
-                    # Check if link text or href contains directory patterns
-                    text_lower = text.lower().strip()
-                    href_lower = href.lower()
-                    
-                    # Skip obvious non-directory links
-                    if any(skip in text_lower for skip in ['application', 'form', 'join', 'register', 'login']):
-                        continue
-                    
-                    # Look for high-priority directory patterns
-                    for pattern in directory_patterns:
-                        if pattern in text_lower or pattern in href_lower:
-                            full_url = urljoin(base_url, href)
-                            directory_links.append(full_url)
-                            logging.info(f"🔗 Found directory link: {text} -> {full_url}")
-                            break
-                        
-                except Exception as e:
-                    continue
+            # Strategy 2: URL Pattern Testing
+            logging.info("🔍 Strategy 2: URL Pattern Testing")
+            pattern_directories = await self._strategy_url_patterns(page, base_url)
+            directory_links.extend(pattern_directories)
             
-            # If no specific directory links found, try common directory URLs
-            if not directory_links:
-                common_directory_paths = [
-                    '/directory', '/members', '/businesses', '/member-directory',
-                    '/business-directory', '/member-listing', '/business-listing',
-                    '/roster', '/search', '/find-members', '/find-businesses'
-                ]
-                
-                for path in common_directory_paths:
-                    test_url = urljoin(base_url, path)
-                    try:
-                        # Test if this URL exists
-                        response = await page.goto(test_url, wait_until="networkidle", timeout=30000)
-                        if response.status == 200:
-                            directory_links.append(test_url)
-                            logging.info(f"🔗 Found common directory path: {test_url}")
-                            break
-                    except Exception as e:
-                        continue
+            # Strategy 3: Navigation Menu Analysis
+            logging.info("🔍 Strategy 3: Navigation Menu Analysis")
+            nav_directories = await self._strategy_navigation_analysis(page, base_url)
+            directory_links.extend(nav_directories)
             
-            # Remove duplicates and limit results
-            directory_links = list(set(directory_links))[:5]
+            # Strategy 4: Content Pattern Recognition
+            logging.info("🔍 Strategy 4: Content Pattern Recognition")
+            content_directories = await self._strategy_content_patterns(page, base_url)
+            directory_links.extend(content_directories)
+            
+            # Remove duplicates and validate
+            unique_directories = list(set(directory_links))
+            validated_directories = []
+            
+            for directory_url in unique_directories:
+                if await self._validate_directory_page(page, directory_url):
+                    validated_directories.append(directory_url)
+                    logging.info(f"✅ Validated directory: {directory_url}")
+                else:
+                    logging.info(f"❌ Invalid directory: {directory_url}")
+            
+            # Return the best validated directories
+            return validated_directories[:3]  # Top 3 validated directories
             
         except Exception as e:
-            logging.error(f"❌ Error finding directory links: {str(e)}")
+            logging.error(f"❌ Error in universal directory discovery: {str(e)}")
+            return []
+    
+    async def _strategy_comprehensive_links(self, page, base_url: str) -> List[str]:
+        """Comprehensive link analysis for any CMS type"""
         
-        return directory_links
+        # Expanded keyword sets for different CMS types and languages
+        all_keywords = [
+            # Primary directory terms
+            'business directory', 'member directory', 'business listing', 'member listing',
+            'business search', 'member search', 'find businesses', 'find members',
+            
+            # Secondary terms
+            'directory', 'businesses', 'members', 'companies', 'organizations',
+            'roster', 'listings', 'membership', 'business guide', 'member guide',
+            
+            # Navigation terms
+            'our businesses', 'our members', 'local businesses', 'browse businesses',
+            'browse members', 'search businesses', 'business database', 'member database',
+            
+            # CMS-specific terms
+            'business profiles', 'member profiles', 'company profiles', 'organization profiles',
+            'business cards', 'member cards', 'company cards', 'organization cards',
+            
+            # Action-based terms
+            'explore businesses', 'explore members', 'discover businesses', 'discover members',
+            'view businesses', 'view members', 'list businesses', 'list members',
+            
+            # Common variations
+            'biz directory', 'biz listing', 'business list', 'member list', 'company list',
+            'organization list', 'business index', 'member index', 'company index'
+        ]
+        
+        content = await page.content()
+        soup = BeautifulSoup(content, 'html.parser')
+        
+        found_links = []
+        
+        for link in soup.find_all('a', href=True):
+            href = link.get('href')
+            text = link.get_text().lower().strip()
+            
+            if not href or href.startswith(('mailto:', 'tel:', 'javascript:', '#')):
+                continue
+                
+            full_url = urljoin(base_url, href)
+            
+            # Skip obvious non-directory links
+            skip_terms = ['application', 'form', 'join', 'register', 'login', 'contact', 'about', 'news', 'events']
+            if any(skip in text for skip in skip_terms):
+                continue
+            
+            # Check against all keywords
+            for keyword in all_keywords:
+                if keyword in text or keyword in href.lower():
+                    found_links.append(full_url)
+                    logging.info(f"🔗 Found link-based directory: {text} -> {full_url}")
+                    break
+        
+        return found_links
+    
+    async def _strategy_url_patterns(self, page, base_url: str) -> List[str]:
+        """Test common URL patterns for any CMS"""
+        
+        from urllib.parse import urlparse
+        
+        parsed_url = urlparse(base_url)
+        base_domain = f'{parsed_url.scheme}://{parsed_url.netloc}'
+        
+        # Comprehensive URL patterns for any CMS
+        url_patterns = [
+            # Standard directory paths
+            '/directory', '/directories', '/business-directory', '/member-directory',
+            '/businesses', '/members', '/companies', '/organizations', '/roster',
+            '/business-listing', '/member-listing', '/business-search', '/member-search',
+            '/find-businesses', '/find-members', '/business-guide', '/member-guide',
+            '/listings', '/database', '/search', '/browse', '/business', '/member',
+            '/membership', '/company', '/profiles', '/list', '/business-list',
+            '/member-list', '/company-list', '/organization-list',
+            
+            # CMS-specific patterns
+            '/business-profiles', '/member-profiles', '/company-profiles',
+            '/business-cards', '/member-cards', '/company-cards',
+            '/biz-directory', '/biz-listing', '/business-index', '/member-index',
+            
+            # WordPress-specific patterns
+            '/business-directory-plugin', '/member-directory-plugin',
+            '/wp-business-directory', '/wp-member-directory',
+            
+            # Custom CMS patterns
+            '/portal/businesses', '/portal/members', '/portal/directory',
+            '/site/businesses', '/site/members', '/site/directory'
+        ]
+        
+        # Test subdomain patterns
+        subdomain_patterns = [
+            'business', 'members', 'directory', 'member', 'companies', 'portal',
+            'businesses', 'biz', 'dir', 'listing', 'listings'
+        ]
+        
+        working_patterns = []
+        
+        # Test URL patterns with timeout
+        for pattern in url_patterns:
+            test_url = base_domain + pattern
+            try:
+                response = await page.goto(test_url, wait_until='networkidle', timeout=15000)
+                if response.status == 200:
+                    working_patterns.append(test_url)
+                    logging.info(f"✅ Working URL pattern: {test_url}")
+            except Exception as e:
+                continue
+        
+        # Test subdomain patterns
+        for subdomain in subdomain_patterns:
+            domain_parts = parsed_url.netloc.split('.')
+            if len(domain_parts) >= 2:
+                test_domain = f'{subdomain}.{".".join(domain_parts[-2:])}'
+                test_url = f'{parsed_url.scheme}://{test_domain}'
+                try:
+                    response = await page.goto(test_url, wait_until='networkidle', timeout=15000)
+                    if response.status == 200:
+                        working_patterns.append(test_url)
+                        logging.info(f"✅ Working subdomain: {test_url}")
+                except Exception as e:
+                    continue
+        
+        return working_patterns
+    
+    async def _strategy_navigation_analysis(self, page, base_url: str) -> List[str]:
+        """Analyze navigation menus for any CMS"""
+        
+        # Look for navigation elements across different CMS types
+        nav_selectors = [
+            'nav', '.navigation', '.nav', '.menu', '.main-menu', '.primary-menu',
+            '.header-menu', '.top-menu', '.site-nav', '.navbar', '.nav-menu',
+            '.main-nav', '.primary-nav', '.top-nav', '.header-nav', '.site-menu',
+            '.navigation-menu', '.menu-main', '.menu-primary', '.menu-header',
+            '.wp-nav-menu', '.genesis-nav-menu', '.nav-primary', '.nav-secondary'
+        ]
+        
+        found_directories = []
+        
+        for selector in nav_selectors:
+            try:
+                nav_elements = await page.locator(selector).all()
+                
+                for nav in nav_elements:
+                    nav_content = await nav.inner_html()
+                    soup = BeautifulSoup(nav_content, 'html.parser')
+                    
+                    for link in soup.find_all('a', href=True):
+                        href = link.get('href')
+                        text = link.get_text().lower().strip()
+                        
+                        if not href:
+                            continue
+                            
+                        full_url = urljoin(base_url, href)
+                        
+                        # Navigation-specific directory indicators
+                        nav_keywords = [
+                            'directory', 'members', 'businesses', 'membership',
+                            'business', 'member', 'company', 'organization',
+                            'roster', 'listings', 'companies', 'profiles'
+                        ]
+                        
+                        for keyword in nav_keywords:
+                            if keyword in text or keyword in href.lower():
+                                found_directories.append(full_url)
+                                logging.info(f"🔗 Found nav directory: {text} -> {full_url}")
+                                break
+                                
+            except Exception as e:
+                continue
+        
+        return found_directories
+    
+    async def _strategy_content_patterns(self, page, base_url: str) -> List[str]:
+        """Content pattern recognition for any CMS"""
+        
+        content = await page.content()
+        
+        # Look for patterns that suggest directory functionality
+        patterns = [
+            r'search\s+(?:for\s+)?(?:businesses|members|companies)',
+            r'browse\s+(?:our\s+)?(?:businesses|members|companies)',
+            r'find\s+(?:local\s+)?(?:businesses|members|companies)',
+            r'(?:business|member)\s+(?:directory|listing|database)',
+            r'(?:our|local)\s+(?:businesses|members|companies)',
+            r'explore\s+(?:businesses|members|companies)',
+            r'discover\s+(?:businesses|members|companies)',
+            r'view\s+(?:all\s+)?(?:businesses|members|companies)',
+            r'(?:business|member|company)\s+(?:profiles|cards|index)'
+        ]
+        
+        pattern_links = []
+        
+        for pattern in patterns:
+            matches = re.finditer(pattern, content, re.I)
+            for match in matches:
+                # Look for nearby links
+                start_pos = max(0, match.start() - 500)
+                end_pos = min(len(content), match.end() + 500)
+                context = content[start_pos:end_pos]
+                
+                # Find links in the context
+                link_matches = re.finditer(r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>([^<]+)</a>', context, re.I)
+                
+                for link_match in link_matches:
+                    href = link_match.group(1)
+                    text = link_match.group(2)
+                    
+                    if not href.startswith(('mailto:', 'tel:', 'javascript:', '#')):
+                        full_url = urljoin(base_url, href)
+                        pattern_links.append(full_url)
+                        logging.info(f"🔗 Found pattern directory: {text} -> {full_url}")
+        
+        return pattern_links
+    
+    async def _validate_directory_page(self, page, url: str) -> bool:
+        """Universal validation for any CMS directory page"""
+        
+        try:
+            await page.goto(url, wait_until='networkidle', timeout=30000)
+            await page.wait_for_timeout(3000)
+            
+            content = await page.content()
+            
+            # Enhanced validation criteria
+            score = 0
+            
+            # Phone numbers (strong indicator)
+            phone_count = len(re.findall(r'\d{3}[-.\s]?\d{3}[-.\s]?\d{4}', content))
+            score += phone_count * 5
+            
+            # Email addresses (strong indicator)
+            email_count = len(re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', content))
+            score += email_count * 5
+            
+            # Business profile links (very strong indicator)
+            profile_patterns = [
+                r'href=["\'][^"\']*(?:detail|profile|member|business|company)[^"\']*["\']',
+                r'href=["\'][^"\']*\/(?:business|member|company)\/[^"\']*["\']',
+                r'href=["\'][^"\']*(?:listing|directory|roster)[^"\']*["\']'
+            ]
+            
+            profile_links = 0
+            for pattern in profile_patterns:
+                profile_links += len(re.findall(pattern, content, re.I))
+            
+            score += profile_links * 10
+            
+            # Directory-specific words
+            directory_words = [
+                'business', 'member', 'company', 'organization', 'contact',
+                'phone', 'email', 'website', 'address', 'category', 'type',
+                'profile', 'listing', 'directory', 'roster', 'database'
+            ]
+            
+            for word in directory_words:
+                word_count = content.lower().count(word)
+                score += min(word_count, 10) * 1  # Cap at 10 occurrences per word
+            
+            # Search/filter functionality (strong indicator)
+            search_patterns = [
+                r'<(?:form|input|select)[^>]*(?:search|filter|category)',
+                r'<(?:button|input)[^>]*(?:search|filter|find)',
+                r'class=["\'][^"\']*(?:search|filter|directory)[^"\']*["\']'
+            ]
+            
+            for pattern in search_patterns:
+                if re.search(pattern, content, re.I):
+                    score += 50
+                    break
+            
+            # Pagination (moderate indicator)
+            pagination_patterns = [
+                r'<[^>]*(?:pagination|pager|load-more)',
+                r'<(?:button|a)[^>]*(?:next|previous|more|load)',
+                r'class=["\'][^"\']*(?:pagination|pager|load-more)[^"\']*["\']'
+            ]
+            
+            for pattern in pagination_patterns:
+                if re.search(pattern, content, re.I):
+                    score += 25
+                    break
+            
+            # Multiple contact blocks (strong indicator)
+            contact_blocks = len(re.findall(r'<[^>]*(?:contact|business|member|company)[^>]*>.*?(?:phone|email|website).*?</[^>]*>', content, re.I | re.S))
+            score += contact_blocks * 20
+            
+            logging.info(f"📊 Directory validation score: {score} (threshold: 100)")
+            
+            return score >= 100
+            
+        except Exception as e:
+            logging.error(f"❌ Error validating directory page {url}: {str(e)}")
+            return False
     
     async def _scrape_businesses_playwright(self, page, page_url: str) -> List[Dict]:
         """Scrape businesses from a page using Playwright"""
