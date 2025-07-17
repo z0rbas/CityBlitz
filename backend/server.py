@@ -866,9 +866,15 @@ class DirectoryDiscoverer:
             for link in soup.find_all('a', href=True):
                 href = link.get('href')
                 if href and ('/list/detail/' in href or '/list/member/' in href or '/list/ql/' in href or '/profile/' in href or '/business/' in href):
+                    # Fix URL construction
                     if href.startswith('/'):
-                        href = urljoin(page_url, href)
-                    profile_links.append(href)
+                        from urllib.parse import urlparse
+                        parsed_url = urlparse(page_url)
+                        base_domain = f"{parsed_url.scheme}://{parsed_url.netloc}"
+                        full_url = base_domain + href
+                    else:
+                        full_url = href
+                    profile_links.append(full_url)
             
             profile_links = list(set(profile_links))
             logging.info(f"🔗 Found {len(profile_links)} business profile links")
