@@ -483,72 +483,176 @@ const App = () => {
 
         {activeTab === 'directories' && (
           <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Discovered Directories</h2>
-            <div className="grid gap-4">
-              {directories.map((directory) => (
-                <div key={directory.id} className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <h4 className="font-medium text-gray-900">{directory.name}</h4>
-                      <p className="text-sm text-gray-500">{directory.url}</p>
-                      <div className="flex items-center space-x-4 mt-2">
-                        <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-                          {directory.directory_type}
-                        </span>
-                        <span className="text-sm text-gray-500">
-                          📍 {directory.location}
-                        </span>
-                        <span className={`text-xs px-2 py-1 rounded-full ${
-                          directory.scrape_status === 'scraped' 
-                            ? 'bg-green-100 text-green-800' 
-                            : directory.scrape_status === 'failed'
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {directory.scrape_status}
-                        </span>
-                        {directory.business_count > 0 && (
-                          <span className="text-sm text-gray-500">
-                            👥 {directory.business_count} businesses
+            <div className="flex items-center gap-3 mb-6">
+              <span className="text-2xl">📁</span>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Directory Management Center</h2>
+                <p className="text-sm text-gray-600">Scrape business data from discovered directories and manage your lead sources</p>
+              </div>
+            </div>
+
+            {/* Status Summary */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              <div className="bg-blue-50 p-4 rounded-lg text-center">
+                <div className="text-2xl font-bold text-blue-600">{stats.totalDirectories}</div>
+                <div className="text-sm text-blue-600">Total Directories</div>
+              </div>
+              <div className="bg-green-50 p-4 rounded-lg text-center">
+                <div className="text-2xl font-bold text-green-600">{stats.scrapedDirectories}</div>
+                <div className="text-sm text-green-600">Scraped & Ready</div>
+              </div>
+              <div className="bg-purple-50 p-4 rounded-lg text-center">
+                <div className="text-2xl font-bold text-purple-600">{stats.totalBusinesses.toLocaleString()}</div>
+                <div className="text-sm text-purple-600">Total Businesses</div>
+              </div>
+              <div className="bg-orange-50 p-4 rounded-lg text-center">
+                <div className="text-2xl font-bold text-orange-600">{stats.businessesWithPhone.toLocaleString()}</div>
+                <div className="text-sm text-orange-600">With Phone Numbers</div>
+              </div>
+            </div>
+
+            {/* Action Guide */}
+            <div className="bg-green-50 border-l-4 border-green-400 p-4 mb-6">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <span className="text-green-400 text-lg">🎯</span>
+                </div>
+                <div className="ml-3">
+                  <h4 className="text-green-800 font-medium">How to Extract Business Data</h4>
+                  <div className="text-sm text-green-700 mt-1">
+                    <p className="mb-1"><strong>Green "Scrape" buttons:</strong> Click to extract business data from that directory</p>
+                    <p className="mb-1"><strong>Blue "View Businesses" buttons:</strong> See extracted business contacts</p>
+                    <p><strong>Gray "Export CSV" buttons:</strong> Download contact list for your CRM/outreach tools</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {directories.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="text-6xl mb-4">📂</div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No Directories Yet</h3>
+                <p className="text-gray-600 mb-4">
+                  Start by discovering directories in the "Discover New Leads" tab above.
+                </p>
+                <button
+                  onClick={() => setActiveTab('discover')}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  🔍 Discover New Leads
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {directories.map((directory) => (
+                  <div key={directory.id} className="border border-gray-200 rounded-lg p-5 hover:border-blue-300 transition-colors">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <h4 className="font-semibold text-gray-900 text-lg">{directory.name}</h4>
+                          <span className={`text-xs px-3 py-1 rounded-full font-medium ${
+                            directory.scrape_status === 'scraped' 
+                              ? 'bg-green-100 text-green-800' 
+                              : directory.scrape_status === 'failed'
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {directory.scrape_status === 'scraped' ? '✅ Ready' : 
+                             directory.scrape_status === 'failed' ? '❌ Failed' : '⏳ Pending'}
                           </span>
+                        </div>
+                        <p className="text-sm text-gray-500 mb-2">🌐 {directory.url}</p>
+                        <div className="flex items-center gap-4 text-sm">
+                          <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                            📂 {directory.directory_type}
+                          </span>
+                          <span className="text-gray-600">
+                            📍 {directory.location}
+                          </span>
+                          {directory.business_count > 0 && (
+                            <span className="text-green-600 font-medium">
+                              👥 {directory.business_count} businesses extracted
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-2 ml-4">
+                        {directory.scrape_status === 'scraped' ? (
+                          <>
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                console.log('Button clicked, directory:', directory);
+                                viewBusinesses(directory);
+                              }}
+                              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium shadow-md"
+                            >
+                              <div className="flex items-center gap-2">
+                                👁️ View {directory.business_count || 0} Businesses
+                              </div>
+                            </button>
+                            <button
+                              onClick={() => exportBusinesses(directory.id, directory.name)}
+                              disabled={exportLoading}
+                              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 transition-colors font-medium shadow-md"
+                            >
+                              {exportLoading ? (
+                                <div className="flex items-center gap-2">
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                  Exporting...
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  📥 Export CSV
+                                </div>
+                              )}
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => scrapeDirectory(directory)}
+                            disabled={loading}
+                            className="px-6 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-md hover:from-green-700 hover:to-green-800 disabled:bg-gray-400 transition-all duration-200 font-semibold shadow-md"
+                          >
+                            {loading ? (
+                              <div className="flex items-center gap-2">
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                Scraping...
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                🚀 Scrape Businesses
+                              </div>
+                            )}
+                          </button>
                         )}
                       </div>
                     </div>
-                    <div className="flex space-x-2">
-                      {directory.scrape_status === 'scraped' && (
-                        <>
-                          <button
-                            onClick={(e) => {
-                              e.preventDefault();
-                              console.log('Button clicked, directory:', directory);
-                              viewBusinesses(directory);
-                            }}
-                            className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm"
-                          >
-                            View Businesses
-                          </button>
-                          <button
-                            onClick={() => exportToCsv(directory.id)}
-                            className="px-3 py-1 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors text-sm"
-                          >
-                            Export CSV
-                          </button>
-                        </>
-                      )}
-                      {directory.scrape_status !== 'scraped' && (
-                        <button
-                          onClick={() => scrapeDirectory(directory.id)}
-                          disabled={loading}
-                          className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 transition-colors text-sm"
-                        >
-                          {loading ? 'Scraping...' : 'Scrape'}
-                        </button>
-                      )}
+                  </div>
+                ))}
+                
+                {directories.filter(d => d.scrape_status === 'scraped').length > 0 && (
+                  <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-blue-600">💼</span>
+                      <h4 className="font-medium text-blue-800">Bulk Export Option</h4>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-blue-700">
+                        Export all businesses from all scraped directories as one master CSV file
+                      </p>
+                      <button
+                        onClick={() => exportBusinesses()}
+                        disabled={exportLoading}
+                        className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 transition-colors font-medium"
+                      >
+                        {exportLoading ? 'Exporting...' : '📊 Export All Businesses'}
+                      </button>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
