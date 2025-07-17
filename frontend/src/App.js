@@ -148,13 +148,14 @@ const App = () => {
     
     if (!directory || !directory.id) {
       console.error('No directory or directory ID provided');
+      alert('❌ Error: Please select a valid directory first');
       return;
     }
     
-    // Set states synchronously first
+    // Show loading state immediately
+    setLoading(true);
     setActiveTab('businesses');
     setSelectedDirectory(directory);
-    setLoading(true);
     setBusinesses([]); // Clear existing businesses
     
     try {
@@ -172,11 +173,89 @@ const App = () => {
       setBusinesses(response.data);
       console.log('Businesses state updated with', response.data.length, 'businesses');
       
+      // Show success message
+      if (response.data.length > 0) {
+        alert(`✅ Success! Found ${response.data.length} businesses in ${directory.name}`);
+      } else {
+        alert(`ℹ️ No businesses found in ${directory.name}. This directory may need to be scraped first.`);
+      }
+      
     } catch (error) {
       console.error('Error in viewBusinesses:', error);
+      alert(`❌ Error loading businesses: ${error.message}`);
     } finally {
       setLoading(false);
       console.log('viewBusinesses completed');
+    }
+  };
+
+  const scrapeDirectory = async (directory) => {
+    if (!directory || !directory.id) {
+      alert('❌ Error: Please select a valid directory');
+      return;
+    }
+
+    setLoading(true);
+    setProgressLogs([]);
+    setShowLogs(true);
+
+    try {
+      const response = await axios.post(`${API}/scrape-directory`, {
+        directory_id: directory.id
+      });
+
+      if (response.data.success) {
+        alert(`✅ Successfully scraped ${response.data.businesses_count} businesses from ${directory.name}!`);
+        await fetchDirectories(); // Refresh directories to show updated status
+        calculateStats(); // Update stats
+      } else {
+        alert(`❌ Scraping failed: ${response.data.message}`);
+      }
+    } catch (error) {
+      console.error('Error scraping directory:', error);
+      alert(`❌ Error: ${error.message}`);
+    } finally {
+      setLoading(false);
+      setShowLogs(false);
+    }
+  };
+
+  const exportBusinesses = async (directoryId = null, directoryName = null) => {
+    setExportLoading(true);
+    
+    try {
+      const url = directoryId 
+        ? `${API}/export-businesses?directory_id=${directoryId}`
+        : `${API}/export-businesses`;
+      
+      const response = await axios.get(url, {
+        responseType: 'blob'
+      });
+
+      // Create download
+      const blob = new Blob([response.data], { type: 'text/csv' });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      
+      const filename = directoryName 
+        ? `${directoryName.replace(/[^a-zA-Z0-9]/g, '_')}_businesses.csv`
+        : 'all_businesses.csv';
+      
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+
+      const businessCount = directoryId ? businesses.length : stats.totalBusinesses;
+      alert(`✅ Successfully exported ${businessCount} businesses to ${filename}!`);
+      
+    } catch (error) {
+      console.error('Error exporting businesses:', error);
+      alert(`❌ Export failed: ${error.message}`);
+    } finally {
+      setExportLoading(false);
     }
   };
 
